@@ -1,0 +1,313 @@
+:root {
+  color-scheme: dark;
+  --ui-bg: rgba(19, 25, 31, 0.9);
+  --ui-border: rgba(255, 255, 255, 0.16);
+  --accent: #76d18b;
+  --danger: #ff8f8f;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  background: #111;
+  color: #f2f7f3;
+}
+
+canvas {
+  display: block;
+}
+
+#ui {
+  position: fixed;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(1200px, 96vw);
+  background: var(--ui-bg);
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  padding: 8px 12px 9px;
+  z-index: 20;
+  backdrop-filter: blur(6px);
+}
+
+#stats {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  font-size: 0.98rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+#stats strong {
+  color: var(--accent);
+}
+
+#shop {
+  margin-top: 7px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: stretch;
+}
+
+.shop-right {
+  margin-left: auto;
+  display: flex;
+}
+
+.shop-item {
+  width: 138px;
+  display: flex;
+}
+
+.buy-btn {
+  width: 100%;
+  border: 1px solid var(--ui-border);
+  background: #1d2a22;
+  color: #f1fff4;
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.buy-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 0;
+  min-height: 96px;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.buy-label {
+  display: block;
+  width: 100%;
+  padding: 6px 7px 6px;
+  font-size: 0.78rem;
+  line-height: 1.2;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.buy-btn:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.buy-btn.selected {
+  border-color: var(--accent);
+  background: #294236;
+}
+
+.buy-btn.utility {
+  background: #26313b;
+  padding: 8px 8px;
+  font-size: 0.82rem;
+}
+
+.utility-item {
+  width: 138px;
+}
+
+.buy-btn.utility.ready {
+  border-color: #8ec5ff;
+}
+
+.buy-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+
+
+#placementHint {
+  margin-top: 6px;
+  font-size: 0.83rem;
+  color: #dce4dd;
+}
+
+#utilityShop {
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.utility-title {
+  font-size: 0.78rem;
+  color: #cfddd0;
+  padding: 3px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+}
+
+.utility-buy {
+  width: auto;
+  min-height: 34px;
+  padding: 6px 10px;
+  font-size: 0.8rem;
+  background: #3a3230;
+}
+
+#muteBtn {
+  position: fixed;
+  right: 12px;
+  top: 12px;
+  z-index: 25;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+  padding: 4px 10px;
+  background: rgba(24, 34, 41, 0.86);
+  color: #eef6ef;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+#muteBtn.muted {
+  opacity: 0.7;
+}
+
+#baseMarker {
+  position: fixed;
+  z-index: 24;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(168, 238, 184, 0.65);
+  background: rgba(20, 42, 28, 0.68);
+  color: #d2ffd9;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  pointer-events: none;
+  box-shadow: 0 0 10px rgba(122, 233, 150, 0.28);
+}
+
+#moneyPopLayer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 24;
+}
+
+.money-pop {
+  position: absolute;
+  color: #95ff8c;
+  font-weight: 700;
+  font-size: 0.9rem;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+  transform: translate(-50%, -50%);
+}
+
+#upgradePanel {
+  position: fixed;
+  left: 50%;
+  bottom: 8px;
+  transform: translateX(-50%);
+  width: min(1200px, 96vw);
+  background: rgba(18, 27, 32, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  padding: 8px 10px;
+  z-index: 23;
+  backdrop-filter: blur(5px);
+}
+
+#upgradePanel.hidden {
+  display: none;
+}
+
+#upgradeTitle {
+  font-size: 0.84rem;
+  color: #deebdf;
+  margin-bottom: 6px;
+}
+
+#upgradeHealth {
+  font-size: 0.8rem;
+  color: #cfe2d0;
+  margin-bottom: 6px;
+}
+
+#upgradeHealthBarTrack {
+  width: min(360px, 100%);
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(18, 30, 22, 0.95);
+  border: 1px solid rgba(155, 230, 153, 0.35);
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
+#upgradeHealthBarFill {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, #4fc55a, #7bf38c);
+  transform-origin: left center;
+  transition: width 100ms linear;
+}
+
+#upgradeButtons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.upgrade-btn {
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: #27353f;
+  color: #f1f7ff;
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.upgrade-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+#gameOver {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: 8px;
+  justify-items: center;
+  background: rgba(8, 10, 12, 0.72);
+  z-index: 30;
+  text-align: center;
+}
+
+#gameOver.hidden {
+  display: none;
+}
+
+#gameOver h1 {
+  margin: 0;
+  color: var(--danger);
+}
+
+#restartBtn {
+  margin-top: 6px;
+  border: 1px solid var(--ui-border);
+  border-radius: 8px;
+  padding: 8px 14px;
+  background: #2a332a;
+  color: #fff;
+  cursor: pointer;
+}

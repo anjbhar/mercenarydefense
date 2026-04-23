@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mercenary Defense</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div id="ui">
+      <div id="stats">
+        <span>Money: $<strong id="money">0</strong></span>
+        <span>Health: <strong id="health">0</strong></span>
+        <span>Wave: <strong id="wave">0</strong></span>
+      </div>
+      <div id="shop">
+        <div class="shop-item">
+          <button class="buy-btn" data-type="rifleman">Rifleman ($50)</button>
+        </div>
+        <div class="shop-item">
+          <button class="buy-btn" data-type="sniper">Sniper ($75)</button>
+        </div>
+        <div class="shop-item">
+          <button class="buy-btn" data-type="machinegun">Sentry Gun ($95)</button>
+        </div>
+        <div class="shop-item">
+          <button class="buy-btn" data-type="grenadier">Grenadier ($130)</button>
+        </div>
+        <div class="shop-right">
+          <div class="shop-item utility-item">
+            <button class="buy-btn utility" id="startWaveBtn">Start Next Wave</button>
+          </div>
+        </div>
+      </div>
+      <div id="utilityShop">
+        <span class="utility-title">Utility</span>
+        <button class="buy-btn utility-buy" id="landmineBtn">Landmine ($40)</button>
+        <button class="buy-btn utility-buy" id="airStrikeBtn">Air Strike ($140)</button>
+      </div>
+      <div id="placementHint">Select a unit, then click anywhere to deploy.</div>
+    </div>
+    <button id="muteBtn" aria-label="Toggle sound">Sound On</button>
+    <div id="baseMarker" aria-hidden="true">BASE</div>
+    <div id="moneyPopLayer" aria-hidden="true"></div>
+    <div id="upgradePanel" class="hidden">
+      <div id="upgradeTitle">Selected Unit</div>
+      <div id="upgradeHealth">HP: 0 / 0</div>
+      <div id="upgradeHealthBarTrack" aria-hidden="true">
+        <div id="upgradeHealthBarFill"></div>
+      </div>
+      <div id="upgradeButtons"></div>
+    </div>
+
+    <div id="gameOver" class="hidden">
+      <h1>Game Over</h1>
+      <p>Your base was overrun.</p>
+      <button id="restartBtn">Restart</button>
+    </div>
+
+    <script type="module" src="./main.js?v=66"></script>
+  </body>
+</html>
