@@ -17,6 +17,16 @@ Open http://localhost:4173. `pnpm install` and `pnpm dev` also work; a pnpm lock
 npm test
 ```
 
+## itch.io upload
+
+Do not ZIP the project folder: it includes `node_modules` and `.git`, which contain thousands of development-only files. On Windows, create the browser upload with:
+
+```sh
+npm run package:itch
+```
+
+Upload `mercenary-defense-itch.zip` to itch.io as an HTML project. The command places `index.html` at the ZIP root, includes only runtime files, and copies the single Phaser browser bundle instead of all of `node_modules`. `npm run build:itch` creates the same unpacked build in `dist/` without making a ZIP.
+
 ## Play
 
 Protect the eastern outpost through **25 manually started waves**. You start with **$240**, 20 base integrity, and a complimentary two-unit garrison. Place up to 25 defenders on open terrain outside the road, clear of structures and other defenders. Units aim and fire automatically. Ground enemies follow the road from the western entrance to the eastern gate, following or passing slower traffic; helicopters fly independently.
