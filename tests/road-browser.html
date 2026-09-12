@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mercenary Defense — Road verification</title>
+<style>
+  html, body { height: 100%; margin: 0; background: #172219; color: #e0e8d7; font: 12px monospace; }
+  header { height: 64px; box-sizing: border-box; padding: 5px 10px; }
+  button { padding: 6px 12px; background: #d4b57b; border: 1px solid #9b875e; cursor: pointer; }
+  output { display: block; margin-top: 5px; }
+  iframe { display: block; width: 100%; height: calc(100% - 64px); border: 0; }
+</style>
+<header>
+  <button id="passing">Passing drill</button>
+  <button id="congestion">Congestion drill</button>
+  <button id="late">Wave 22</button>
+  <button id="step">Advance 5 seconds</button>
+  <button id="reset">Reset game</button>
+  <output id="report" role="status">Loading battlefield…</output>
+</header>
+<iframe id="battlefield" src="../index.html" title="Live Mercenary Defense game"></iframe>
+<script type="module">
+  // Developer-only fixtures use the actual scene, UI, rendering and combat.
+  // No debug controls or campaign shortcuts are shipped in the game interface.
+  import { ROAD, sampleRoad, insideRoad } from '../src/game/road.js';
+  import { initializeGround, groundOverlap } from '../src/game/traffic.js';
+  import { getWavePlan, WaveManager } from '../src/game/wave-manager.js';
+  import { destroyEntity, createUnit } from '../src/game/models.js';
+  import { GAME_CONFIG } from '../src/game/config.js';
+  import { placementError } from '../src/game/utils.js';
+  const frame = document.getElementById('battlefield'), report = document.getElementById('report');
+  const game = () => frame.contentWindow.mercenaryGame;
+  let scenario = 'Normal campaign', passed = false, first, second;
+  function reset() {
+    const g = game(); if (!g) return;
+    for (const e of [...g.units, ...g.enemies]) destroyEntity(e);
+    for (const mine of g.mines) mine.sprite.destroy();
+    for (const strike of g.strikes) { strike.marker.destroy(); strike.label.destroy(); }
+    g.units = []; g.enemies = []; g.mines = []; g.strikes = []; g.projectiles = [];
+    g.waveManager = new WaveManager(g); g.spawnIndex = 0; g.money = 350; g.health = 20;
+    g.gameOver = false; g.paused = false; g.speed = 1; g.kills = 0; g.elapsed = 0; g.sfx.reset();
+    const doc = frame.contentDocument;
+    doc.getElementById('endDialog').close(); doc.getElementById('helpDialog').close();
+    doc.getElementById('pauseOverlay').classList.add('hidden');
+    g.clearSelection(false); g.updateHUD(); passed = false; first = second = null;
+    return g;
+  }
+  function spawn(g, type, distance, lane, speed) {
+    const stats = getWavePlan(22).enemies.find(e => e.type === type);
+    g.spawnEnemy({ ...stats, speed });
+    const e = g.enemies.at(-1); initializeGround(e, e.trafficId, lane);
+    e.pending = false; e.roadDistance = distance;
+    const p = sampleRoad(distance, e.lateralOffset); e.x = p.x; e.y = p.y; e.heading = p.angle;
+    return e;
+  }
+  function drill(congested) {
+    const g = reset(); if (!g) return;
+    scenario = congested ? 'Congestion' : 'Passing';
+    g.waveManager.wave = 22; g.waveManager.plan = getWavePlan(22); g.waveManager.active = true;
+    first = spawn(g, 'tank', 430, 2, congested ? 0 : 15);
+    second = spawn(g, 'infantry', 270, 2, 45);
+    if (congested) {
+      spawn(g, 'heavy', 430, 0, 0); spawn(g, 'heavy', 430, 4, 0);
+      spawn(g, 'infantry', 165, 0, 45); spawn(g, 'infantry', 140, 4, 40);
+      spawn(g, 'juggernaut', 80, 2, 30);
+    }
+    g.update(0, 16); g.updateHUD();
+  }
+  document.getElementById('passing').onclick = () => drill(false);
+  document.getElementById('congestion').onclick = () => drill(true);
+  document.getElementById('late').onclick = () => {
+    const g = reset(); if (!g) return; scenario = 'Wave 22';
+    for (const u of GAME_CONFIG.starterDefenders) g.units.push(createUnit(g, u.type, u.x, u.y, true));
+    g.units.push(createUnit(g, 'aa', 690, 510));
+    g.waveManager.wave = 21; g.waveManager.startWave();
+  };
+  document.getElementById('step').onclick = () => {
+    const g = game(); if (!g) return;
+    for (let i = 0; i < 100; i++) g.update(0, 50);
+    updateReport();
+  };
+  document.getElementById('reset').onclick = () => { scenario = 'Normal campaign'; frame.contentWindow.location.reload(); };
+  function updateReport() {
+    const g = game(); if (!g?.traffic) return;
+    const ground = g.enemies.filter(e => !e.airborne && !e.pending);
+    let overlaps = 0;
+    for (let i = 0; i < ground.length; i++) for (let j = i + 1; j < ground.length; j++) if (groundOverlap(ground[i], ground[j], undefined, undefined, undefined, 0)) overlaps++;
+    if (first && second && second.roadDistance > first.roadDistance + 60) passed = true;
+    const invalid = g.units.filter((u, i) => placementError(u, g.units.filter((_, j) => i !== j))).length;
+    report.textContent = `${scenario} | ground ${ground.length} / aircraft ${g.enemies.filter(e => e.airborne).length} / tanks ${ground.filter(e => e.type === 'tank').length} | overlaps ${overlaps} / outside road ${ground.filter(e => !insideRoad(e, e.radius)).length} / invalid defenders ${invalid} | speed ${g.speed}x | ${g.paused ? 'paused' : 'running'}${second ? ` | passed ${passed} | follower speed ${second.currentSpeed.toFixed(1)}` : ''}`;
+  }
+  setInterval(updateReport, 250);
+</script>
+</html>

@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mercenary Defense — Audio checks</title>
+<style>
+  body { background: #172219; color: #e0e8d7; font: 15px/1.6 monospace; max-width: 850px; padding: 28px; margin: auto; }
+  button { padding: 14px; font: inherit; background: #d4b57b; border: 0; cursor: pointer; }
+  pre { white-space: pre-wrap; font-size: 12px; }
+</style>
+<h1>Web Audio smoke checks</h1>
+<p>Plays one short generated WAV test tone and a procedural rifle shot. No production assets are needed.</p>
+<button id="run">Run audio checks</button>
+<pre id="result" role="status">Ready.</pre>
+<script type="module">
+  import { SoundManager } from '../src/game/sound.js';
+  const button = document.getElementById('run');
+  const result = document.getElementById('result');
+  button.addEventListener('click', async () => {
+    button.disabled = true;
+    const sound = new SoundManager({ baseURL: new URL('./fixtures/audio/', location.href) });
+    const report = [];
+    const check = (condition, description) => { if (!condition) throw new Error(description); report.push(`PASS: ${description}`); result.textContent = report.join('\n'); };
+    try {
+      sound.warmup();
+      await sound.audioContext.resume();
+      check(sound.audioContext.state === 'running', 'Audio context unlocked by user gesture');
+      await sound.loadCue('ui.select');
+      check(sound.getDiagnostics().loadedSamples === 1, 'Real WAV fetched and decoded');
+      check(sound.play('ui.select'), 'Recorded-buffer playback starts');
+      await new Promise(resolve => setTimeout(resolve, 250));
+      check(sound.voices.size === 0, 'Natural source ending releases voice nodes');
+      check(sound.play('weapon.friendly.rifleman', { x: 200 }), 'Missing weapon asset uses procedural audio');
+      check(sound.getDiagnostics().proceduralVariations === 1, 'Generated buffer cached');
+      sound.setPaused(true);
+      check(sound.voices.size === 0 && !sound.play('weapon.friendly.rifleman'), 'Pause stops and gates world audio');
+      check(sound.play('ui.pause'), 'UI audio still works while paused');
+      sound.setMuted(true);
+      check(sound.voices.size === 0 && sound.masterGain.gain.value === 0, 'Mute stops all tails and zeros master');
+      sound.setMuted(false); sound.reset();
+      check(!sound.paused && sound.play('ui.select'), 'Reset permits new playback');
+      await sound.loadCue('weapon.friendly.rifleman');
+      check(Object.keys(sound.getDiagnostics().failures).length === 0, 'No asset loading errors with partial catalog');
+      await sound.dispose();
+      check(sound.audioContext.state === 'closed', 'Teardown closes the real AudioContext');
+      result.textContent += `\n\nAll ${report.length} browser audio checks passed.`;
+    } catch (error) {
+      result.textContent += `\nFAIL: ${error.stack}`;
+    } finally {
+      await sound.dispose();
+      button.disabled = false;
+    }
+  });
+</script>

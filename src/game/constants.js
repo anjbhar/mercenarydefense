@@ -1,91 +1,18 @@
-import { THREE } from "./three.js";
-
-const SOLDIER_TYPES = {
-  rifleman: {
-    label: "Rifleman",
-    cost: 50,
-    rangeRatio: 0.45,
-    coneAngle: 360,
-    fireRate: 1.45,
-    damage: 11,
-    projectileSpeed: 44,
-    projectileRadius: 0.4,
-    projectileColor: 0xf6d76b,
-    rangeColor: 0x73c06e,
-    color: 0x56c86f,
-    model: "rifleman",
-    health: 120,
-    muzzleLocal: null,
-    shellLocal: null,
-  },
-  sniper: {
-    label: "Sniper",
-    cost: 75,
-    rangeRatio: 0.65,
-    coneAngle: 360,
-    fireRate: 0.72,
-    damage: 24,
-    projectileSpeed: 66,
-    projectileRadius: 0.35,
-    projectileColor: 0xc6e8ff,
-    rangeColor: 0x74b6ee,
-    color: 0x8ee89e,
-    model: "sniper",
-    health: 90,
-    muzzleLocal: null,
-    shellLocal: null,
-  },
-  grenadier: {
-    label: "Grenadier",
-    cost: 130,
-    rangeRatio: 0.56,
-    coneAngle: 360,
-    rangeShape: "circle",
-    fireRate: 0.55,
-    damage: 52,
-    projectileSpeed: 28,
-    projectileRadius: 0.45,
-    projectileColor: 0xffb07a,
-    splashRadius: 5.2,
-    arcHeight: 3.8,
-    rangeColor: 0xd98254,
-    color: 0x6ab275,
-    model: "grenadier",
-    health: 130,
-    muzzleLocal: null,
-    shellLocal: null,
-  },
-
-  machinegun: {
-    label: "Sentry Gun",
-    cost: 95,
-    rangeRatio: 0.58,
-    coneAngle: 98,
-    rangeShape: "circle",
-    fireRate: 5.1,
-    damage: 4,
-    projectileSpeed: 84,
-    projectileRadius: 0.27,
-    projectileColor: 0xfff5ad,
-    rangeColor: 0xe2cf6d,
-    color: 0xa6b0bc,
-    model: "turret",
-    health: 180,
-    muzzleLocal: null,
-    shellLocal: null,
-  }
+export const SOLDIER_TYPES = {
+  rifleman: { label: 'Rifleman', role: 'Versatile infantry', cost: 50, range: 205, fireRate: 1.45, damage: 11, health: 120, color: '#b6c98c', upgrades: [{ id: 'commando', label: 'Commando', cost: 120, damage: 1.7, fireRate: 1.5, range: 1.1 }] },
+  sniper: { label: 'Sniper', role: 'Long-range precision', cost: 75, range: 330, fireRate: 0.72, damage: 24, health: 90, color: '#9cc3cb', upgrades: [{ id: 'fiftycal', label: '.50 Cal Sniper', cost: 140, damage: 2.2, fireRate: 0.85, range: 1.15 }] },
+  machinegun: { label: 'Sentry Gun', role: 'Rapid-fire suppression', cost: 95, range: 235, fireRate: 5.1, damage: 4, health: 180, color: '#d9c689', upgrades: [{ id: 'minigun', label: 'Advanced Sentry', cost: 165, damage: 1.35, fireRate: 1.8, range: 1.08 }, { id: 'laser', label: 'Laser Sentry', cost: 240, damage: 1.9, fireRate: 1.22, range: 1.1 }] },
+  grenadier: { label: 'Grenadier', role: 'Area damage', cost: 130, range: 255, fireRate: 0.55, damage: 52, splash: 62, health: 130, color: '#dba579', upgrades: [{ id: 'rpg', label: 'Rocket Specialist', cost: 180, damage: 1.7, fireRate: 1.2, range: 1.1 }] },
+  aa: { label: 'AA Gun', role: 'Anti-air defense', cost: 160, range: 370, fireRate: 2.4, damage: 18, health: 165, airTargets: true, color: '#91c5be', upgrades: [{ id: 'flak', label: 'Flak Battery', cost: 210, damage: 1.8, fireRate: 1.3, range: 1.1 }] },
 };
-
-function setUnitOffsets() {
-  SOLDIER_TYPES.rifleman.muzzleLocal = new THREE.Vector3(-2.8, 1.55, 0);
-  SOLDIER_TYPES.rifleman.shellLocal = new THREE.Vector3(-1.0, 1.55, 0.15);
-  SOLDIER_TYPES.sniper.muzzleLocal = new THREE.Vector3(-3.3, 1.55, 0);
-  SOLDIER_TYPES.sniper.shellLocal = new THREE.Vector3(-0.55, 1.65, 0.48);
-  SOLDIER_TYPES.grenadier.muzzleLocal = new THREE.Vector3(-2.95, 1.75, 0);
-  SOLDIER_TYPES.grenadier.shellLocal = new THREE.Vector3(-1.1, 1.6, 0.2);
-  SOLDIER_TYPES.machinegun.muzzleLocal = new THREE.Vector3(-3.05, 1.8, 0);
-  SOLDIER_TYPES.machinegun.shellLocal = new THREE.Vector3(-0.45, 1.72, 0.8);
-}
-
-export { SOLDIER_TYPES, setUnitOffsets };
-
+export const ENEMY_TYPES = {
+  infantry: { healthFactor: 1, speedFactor: 1, attackDamage: 5, attackCooldown: 1.35, attackRange: 160, airborne: false },
+  heavy: { healthFactor: 1.55, speedFactor: .8, attackDamage: 8, attackCooldown: 1.55, attackRange: 175, suppression: 1.25, airborne: false },
+  juggernaut: { healthFactor: 3.3, speedFactor: .62, attackDamage: 12, attackCooldown: 1.9, attackRange: 160, suppression: 2, airborne: false },
+  tank: { healthFactor: 5.8, speedFactor: .52, attackDamage: 16, attackCooldown: 2.6, attackRange: 230, airborne: false },
+  helicopter: { healthFactor: 2.4, speedFactor: .92, attackDamage: 7, attackCooldown: 1.25, attackRange: 190, airborne: true },
+};
+export const UTILITIES = {
+  mine: { label: 'Landmine', cost: 40, radius: 72, triggerRadius: 25, damage: 170 },
+  airstrike: { label: 'Air Strike', cost: 140, radius: 125, damage: 230 },
+};
