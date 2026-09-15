@@ -6,7 +6,7 @@ import { createUnit, createEnemy, destroyEntity } from './models.js';
 import { CombatEffects } from './effects.js';
 import { SoundManager } from './sound.js';
 import { distance, clamp, lerpAngle, placementError, sellValue } from './utils.js';
-import { ROAD, roadPolyline } from './road.js';
+import { ROAD, nearestRoad, roadPolyline } from './road.js';
 import { GroundTraffic } from './traffic.js';
 
 const $ = id => document.getElementById(id);
@@ -17,8 +17,33 @@ const ENEMY_BODY_TURN_SPEED = 9;
 const ENEMY_FIRE_TOLERANCE = .16;
 const SENTRY_HEAT_PER_SHOT = .075;
 const SENTRY_COOL_RATE = .35;
+const FIELD_VISIBILITY_X = -24;
+const SUPPRESSION_IMMUNE_TYPES = new Set(['machinegun', 'aa']);
+const SETTINGS_KEY = 'mercenary-defense-settings-v1';
+
+function savedSettings() {
+  try { return JSON.parse(globalThis.localStorage?.getItem(SETTINGS_KEY)) || {}; } catch { return {}; }
+}
+
+function selectDefenderTarget(unit, candidates) {
+  if (!candidates.length) return null;
+  if (unit.targetPriority === 'closest') {
+    if (candidates[0].airborne) return candidates.reduce((best, enemy) => distance(unit, enemy) < distance(unit, best) ? enemy : best);
+    const towerOffset = nearestRoad(unit).offset;
+    return candidates.reduce((best, enemy) => {
+      if (!best) return enemy;
+      const laneDistance = Math.abs(enemy.lateralOffset - towerOffset);
+      const bestLaneDistance = Math.abs(best.lateralOffset - towerOffset);
+      return laneDistance < bestLaneDistance || laneDistance === bestLaneDistance && distance(unit, enemy) < distance(unit, best) ? enemy : best;
+    }, null);
+  }
+  if (unit.targetPriority === 'strongest') return candidates.reduce((best, enemy) => enemy.health > best.health ? enemy : best);
+  if (unit.targetPriority === 'weakest') return candidates.reduce((best, enemy) => enemy.health < best.health ? enemy : best);
+  return candidates.reduce((best, enemy) => !best || (enemy.airborne ? enemy.x > best.x : enemy.roadDistance > best.roadDistance) ? enemy : best, null);
+}
 
 function selectEnemyTarget(enemy, units) {
+  if (!enemy.airborne && enemy.x < 0) return null;
   const candidates = units.filter(unit => unit.alive && distance(enemy, unit) < enemy.attackRange);
   if (!candidates.length) return null;
   if (enemy.type === 'helicopter') {
@@ -41,11 +66,6 @@ function defenderDamageMultiplier(enemy, source) {
     if (source.type === 'rifleman') return .4;
     if (source.type === 'sniper') return source.specialUpgrades?.fiftycal ? 1 : .65;
   }
-  if (enemy.type === 'juggernaut' && Number.isFinite(enemy.heading)) {
-    const incomingAngle = Math.atan2(source.y - enemy.y, source.x - enemy.x);
-    const angle = Math.abs(Math.atan2(Math.sin(incomingAngle - enemy.heading), Math.cos(incomingAngle - enemy.heading)));
-    if (angle < Math.PI / 3) return .5;
-  }
   return 1;
 }
 
@@ -57,9 +77,12 @@ export class Battlefield extends (Phaser?.Scene || class {}) {
     this.units = []; this.enemies = []; this.mines = []; this.projectiles = []; this.strikes = [];
     this.paused = false; this.gameOver = false; this.speed = 1; this.kills = 0; this.elapsed = 0; this.spawnIndex = 0;
     this.selectedType = null; this.selectedUnit = null; this.gridVisible = false; this.hudTimer = 0;
-    this.pointerOverHUD = false; this.hintExpires = 0;
+    this.pointerOverHUD = false; this.hintExpires = 0; this.debugVisible = false;
     this.sfx = this.game.registry.get('sfx');
     this.sfx.reset();
+    const settings = savedSettings();
+    if (Number.isFinite(settings.volume)) this.sfx.setVolume(settings.volume);
+    if (typeof settings.muted === 'boolean') this.sfx.setMuted(settings.muted);
     createArt(this);
     this.add.image(600, 350, 'terrain');
     this.grid = this.add.graphics().setDepth(1).setVisible(false);
@@ -91,10 +114,19 @@ export class Battlefield extends (Phaser?.Scene || class {}) {
     });
     this.input.mouse?.disableContextMenu();
     this.input.keyboard.on('keydown', event => {
+      if (event.code === 'F3') {
+        event.preventDefault(); this.debugVisible = !this.debugVisible;
+        $('debugPanel').classList.toggle('hidden', !this.debugVisible);
+        if (this.debugVisible) {
+          $('debugWave').value = String(Math.min(25, this.waveManager.wave + 1));
+          $('debugFunds').value = String(this.money);
+        }
+        this.updateDiagnostics(); return;
+      }
       if (event.repeat || document.querySelector('dialog[open]') || /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName)) return;
       this.sfx.warmup();
       const keys = [...Object.keys(SOLDIER_TYPES), 'mine', 'airstrike'];
-      if (/^[1-7]$/.test(event.key)) this.choose(keys[Number(event.key) - 1]);
+      if (/^[1-8]$/.test(event.key)) this.choose(keys[Number(event.key) - 1]);
       if (event.code === 'Escape') this.clearSelection();
       if (event.code === 'KeyM') this.toggleMute();
       if (event.code === 'Space') { event.preventDefault(); this.waveManager.active || this.paused ? this.togglePause() : this.waveManager.startWave(); }
@@ -104,6 +136,7 @@ export class Battlefield extends (Phaser?.Scene || class {}) {
     $('pauseOverlay').classList.add('hidden');
     $('phaseBanner').classList.remove('active');
     $('phaseText').textContent = 'PREPARATION PHASE';
+    $('debugPanel').classList.add('hidden');
     this.hint('Your garrison is ready. Add defenders, then start the first wave.');
     this.updateHUD(); this.updateIntel();
     window.mercenaryGame = this;
@@ -129,7 +162,10 @@ export class Battlefield extends (Phaser?.Scene || class {}) {
     on('muteBtn', () => this.toggleMute());
     on('gridBtn', () => { this.gridVisible = !this.gridVisible; this.grid.setVisible(this.gridVisible); this.sfx.ui('grid'); $('gridBtn').setAttribute('aria-pressed', this.gridVisible); });
     on('mineBtn', () => this.choose('mine')); on('airstrikeBtn', () => this.choose('airstrike'));
+    on('debugSetWaveBtn', () => this.setDebugWave($('debugWave').value));
+    on('debugSetFundsBtn', () => this.setDebugFunds($('debugFunds').value));
     on('upgradeBtn', () => this.upgradeSelected()); on('sellBtn', () => this.sellSelected()); on('closeSelectionBtn', () => this.clearSelection());
+    $('targetPriority').addEventListener('change', event => { if (this.selectedUnit) { this.selectedUnit.targetPriority = event.target.value; this.sfx.ui('select'); } }, { signal: this.uiEvents.signal });
     on('helpBtn', () => { this.resumeAfterHelp = !this.paused && !this.gameOver; if (this.resumeAfterHelp) this.togglePause(false); this.sfx.ui('help-open'); $('helpDialog').showModal(); });
     on('closeHelpBtn', () => $('helpDialog').close()); on('helpDoneBtn', () => $('helpDialog').close());
     $('helpDialog').addEventListener('close', () => { if (this.resumeAfterHelp && this.paused) this.togglePause(false); this.resumeAfterHelp = false; this.sfx.ui('help-close'); }, { signal: this.uiEvents.signal });
@@ -140,7 +176,10 @@ export class Battlefield extends (Phaser?.Scene || class {}) {
   toggleMute() {
     this.sfx.setMuted(!this.sfx.muted);
     if (!this.sfx.muted) this.sfx.ui('audio-on');
-    this.updateHUD();
+    this.saveSettings(); this.updateHUD();
+  }
+  saveSettings() {
+    try { globalThis.localStorage?.setItem(SETTINGS_KEY, JSON.stringify({ volume: this.sfx.volume, muted: this.sfx.muted })); } catch { /* Storage can be unavailable. */ }
   }
   togglePause(feedback = true) {
     if (this.gameOver) return;
@@ -214,13 +253,16 @@ export class Battlefield extends (Phaser?.Scene || class {}) {
     const upgrade = SOLDIER_TYPES[unit.type].upgrades[unit.level];
     if (!upgrade || this.money < upgrade.cost) { this.sfx.ui('denied'); return; }
     this.money -= upgrade.cost; unit.invested += upgrade.cost;
-    unit.damage *= upgrade.damage; unit.fireRate *= upgrade.fireRate; unit.range *= upgrade.range;
+    if (upgrade.damage) unit.damage *= upgrade.damage;
+    if (upgrade.healing) unit.healing *= upgrade.healing;
+    unit.fireRate *= upgrade.fireRate; unit.range *= upgrade.range;
     unit.level++; unit.specialUpgrades[upgrade.id] = true; unit.name = upgrade.label;
     unit.maxHealth = Math.ceil(unit.maxHealth * 1.2); unit.health = unit.maxHealth; unit.heat = 0; unit.overheated = false;
+    if (upgrade.id === 'fiftycal') unit.sprite.setTexture('sniper-fiftycal');
     unit.sprite.setTint(upgrade.id === 'laser' ? 0xffb2a4 : 0xf3e5b9);
     this.sfx.ui('upgrade');
     this.effects.popup(unit.x, unit.y, 'UPGRADED', '#d3e8ad');
-    this.hint(`${unit.name} ready. Firepower increased and health restored.`);
+    this.hint(`${unit.name} ready. ${unit.type === 'medic' ? 'Healing capacity' : 'Firepower'} increased and health restored.`);
     this.updateHUD(); this.renderSelection();
   }
   sellSelected() {
@@ -235,14 +277,18 @@ export class Battlefield extends (Phaser?.Scene || class {}) {
     $('selectionPanel').classList.toggle('hidden', !unit);
     $('gameShell').classList.toggle('has-selection', Boolean(unit));
     if (!unit) return;
-    if ($('selectedPortrait').dataset.type !== unit.type) {
-      $('selectedPortrait').src = this.textures.get(unit.type).getSourceImage().toDataURL();
-      $('selectedPortrait').dataset.type = unit.type;
+    const portraitTexture = unit.type === 'sniper' && unit.specialUpgrades.fiftycal ? 'sniper-fiftycal' : unit.type;
+    if ($('selectedPortrait').dataset.texture !== portraitTexture) {
+      $('selectedPortrait').src = this.textures.get(portraitTexture).getSourceImage().toDataURL();
+      $('selectedPortrait').dataset.texture = portraitTexture;
     }
     $('selectedName').textContent = unit.name;
     $('selectedHP').textContent = `${Math.ceil(unit.health)} / ${unit.maxHealth}`;
-    $('selectedDamage').textContent = Math.round(unit.damage);
+    $('selectedPowerLabel').textContent = unit.type === 'medic' ? 'Healing' : 'Damage';
+    $('selectedDamage').textContent = Math.round(unit.type === 'medic' ? unit.healing : unit.damage);
     $('selectedKills').textContent = unit.kills;
+    $('targetControl').classList.toggle('hidden', unit.type === 'medic');
+    $('targetPriority').value = unit.targetPriority || 'closest';
     const upgrade = SOLDIER_TYPES[unit.type].upgrades[unit.level];
     $('upgradeBtn').textContent = upgrade ? `${upgrade.label} · $${upgrade.cost}` : 'Fully upgraded';
     $('upgradeBtn').disabled = !upgrade || this.money < upgrade.cost || this.paused || this.gameOver;
@@ -252,8 +298,11 @@ export class Battlefield extends (Phaser?.Scene || class {}) {
   updateIntel() {
     const next = Math.min(25, this.waveManager.wave + 1);
     const plan = getWavePlan(next);
-    $('intelTypes').textContent = [...new Set(plan.enemies.map(enemy => enemy.type))].map(type => type.toUpperCase()).join(' / ');
-    $('intelDescription').textContent = next === 14 ? 'Air contact detected. Deploy an AA gun before launching wave 14.' : `${plan.count} hostiles approaching. ${next >= 8 ? 'Armor inbound. Use explosives or precision fire.' : next >= 4 ? 'Heavy resistance. Prepare crossfire and area defenses.' : 'Deploy your squad and prepare the outpost.'}`;
+    const counts = plan.enemies.reduce((all, enemy) => ({ ...all, [enemy.type]: (all[enemy.type] || 0) + 1 }), {});
+    $('intelTypes').textContent = Object.entries(counts).map(([type, count]) => `${count}× ${type.toUpperCase()}`).join(' · ');
+    const threat = next < 4 ? 'LOW' : next < 8 ? 'ELEVATED' : next < 14 ? 'HIGH' : 'SEVERE';
+    const warning = next === 14 ? ' First aircraft detected—deploy AA.' : next >= 8 ? ' Armor resists small arms.' : next >= 4 ? ' Expect suppression and layered armor.' : '';
+    $('intelDescription').textContent = `${threat} THREAT · ${plan.count} contacts.${warning}`;
   }
   updateHUD() {
     const wave = this.waveManager;
@@ -271,8 +320,10 @@ export class Battlefield extends (Phaser?.Scene || class {}) {
     $('baseStatus').textContent = this.health > 14 ? 'All systems operational' : this.health > 5 ? 'Perimeter compromised' : 'Critical damage. Hold the line.';
     $('wave').textContent = String(wave.wave).padStart(2, '0');
     $('unitCount').textContent = `${this.units.length} / ${GAME_CONFIG.maxDefenders}`;
-    $('waveStatus').textContent = wave.active ? `${wave.queue.length} reinforcements incoming` : 'Awaiting your command';
-    $('enemyCount').textContent = `${this.enemies.length} HOSTILES`;
+    const visibleEnemies = this.enemies.filter(enemy => !enemy.pending && (enemy.airborne || enemy.x >= FIELD_VISIBILITY_X)).length;
+    const inboundEnemies = wave.queue.length + this.enemies.length - visibleEnemies;
+    $('waveStatus').textContent = wave.active ? `${inboundEnemies} reinforcements incoming` : 'Awaiting your command';
+    $('enemyCount').textContent = visibleEnemies ? `${visibleEnemies} HOSTILES` : wave.active && inboundEnemies ? `${inboundEnemies} INBOUND` : '0 HOSTILES';
     $('waveDots').querySelectorAll('i').forEach((dot, i) => { dot.className = i < wave.wave - (wave.active ? 1 : 0) ? 'done' : i === wave.wave - 1 && wave.active ? 'current' : ''; });
     $('startWaveBtn').disabled = wave.active || this.paused || this.gameOver;
     $('startWaveBtn').firstElementChild.textContent = wave.active ? 'Wave active' : `Start wave ${String(Math.min(25, wave.wave + 1)).padStart(2, '0')}`;
@@ -286,6 +337,7 @@ export class Battlefield extends (Phaser?.Scene || class {}) {
     $('muteBtn').textContent = this.sfx.muted ? '×♪' : '♪';
     $('muteBtn').setAttribute('aria-label', this.sfx.muted ? 'Unmute audio' : 'Mute audio');
     $('muteBtn').setAttribute('aria-pressed', String(this.sfx.muted));
+    this.updateDiagnostics();
     document.querySelectorAll('[data-type], [data-utility]').forEach(button => {
       const type = button.dataset.type || button.dataset.utility;
       button.classList.toggle('selected', type === this.selectedType);
@@ -295,6 +347,35 @@ export class Battlefield extends (Phaser?.Scene || class {}) {
       button.disabled = this.paused || this.gameOver || unaffordable || (Boolean(SOLDIER_TYPES[type]) && this.units.length >= GAME_CONFIG.maxDefenders);
     });
     this.renderSelection();
+  }
+  updateDiagnostics() {
+    if (!this.debugVisible) return;
+    const pending = this.enemies.filter(enemy => enemy.pending).length;
+    const hidden = this.enemies.filter(enemy => !enemy.airborne && !enemy.pending && enemy.x < FIELD_VISIBILITY_X).length;
+    const slowest = this.enemies.filter(enemy => !enemy.airborne && !enemy.pending).reduce((value, enemy) => Math.min(value, enemy.currentSpeed ?? Infinity), Infinity);
+    $('debugStats').textContent = `wave ${this.waveManager.wave} · queue ${this.waveManager.queue.length}\nactive ${this.enemies.length} · pending ${pending} · hidden ${hidden}\nslowest ${Number.isFinite(slowest) ? slowest.toFixed(1) : '—'} · projectiles ${this.projectiles.length}`;
+    $('debugSetWaveBtn').disabled = this.waveManager.active || this.gameOver;
+  }
+  setDebugWave(value) {
+    const nextWave = clamp(Math.trunc(Number(value)) || 1, 1, 25);
+    $('debugWave').value = String(nextWave);
+    if (this.waveManager.active || this.gameOver) {
+      this.sfx.ui('denied'); this.hint('Debug wave changes are only available between waves.'); return false;
+    }
+    this.waveManager.wave = nextWave - 1;
+    this.updateHUD(); this.updateIntel();
+    this.hint(`Debug: next assault set to wave ${nextWave}.`);
+    return true;
+  }
+  setDebugFunds(value) {
+    const funds = Math.trunc(Number(value));
+    if (!Number.isFinite(funds)) {
+      this.sfx.ui('denied'); this.hint('Debug funds must be a valid number.'); return false;
+    }
+    this.money = clamp(funds, 0, 9999999);
+    $('debugFunds').value = String(this.money);
+    this.updateHUD(); this.hint(`Debug: funds set to $${this.money}.`);
+    return true;
   }
   onWaveStart(plan) {
     this.clearSelection(false); this.sfx.waveStart();
@@ -311,6 +392,7 @@ export class Battlefield extends (Phaser?.Scene || class {}) {
     this.updateHUD(); this.updateIntel();
   }
   addMoney(amount) { this.money += amount; }
+  awardWaveBonus(amount) { this.addMoney(amount); }
   spawnEnemy(stats) { this.enemies.push(createEnemy(this, stats, this.spawnIndex++)); }
   removeUnit(unit) {
     destroyEntity(unit); this.units = this.units.filter(other => other !== unit);
@@ -318,8 +400,16 @@ export class Battlefield extends (Phaser?.Scene || class {}) {
   }
   damageEnemy(enemy, amount, source) {
     if (!enemy.alive) return;
-    enemy.health -= amount * defenderDamageMultiplier(enemy, source); enemy.hitTime = .12;
-    this.effects.hit(enemy.x, enemy.y);
+    const multiplier = defenderDamageMultiplier(enemy, source);
+    const damage = amount * multiplier;
+    const armorBeforeHit = Math.max(0, enemy.armor || 0);
+    const absorbed = Math.min(armorBeforeHit, damage);
+    enemy.armor = armorBeforeHit - absorbed;
+    enemy.health -= damage - absorbed; enemy.hitTime = .12;
+    if (absorbed > 0 || multiplier < 1) {
+      this.effects.armorHit(enemy.x, enemy.y);
+      if (!(enemy.armorNoticeCooldown > 0)) { this.effects.popup(enemy.x, enemy.y - 10, 'ARMOR', '#bfe8dd'); enemy.armorNoticeCooldown = .65; }
+    } else this.effects.hit(enemy.x, enemy.y);
     if (enemy.health <= 0) {
       this.sfx.kill();
       this.kills++; if (source?.alive) source.kills++;
@@ -330,7 +420,7 @@ export class Battlefield extends (Phaser?.Scene || class {}) {
   }
   damageUnit(unit, amount, source) {
     if (!unit.alive) return;
-    if (source?.suppression) {
+    if (source?.suppression && !SUPPRESSION_IMMUNE_TYPES.has(unit.type)) {
       if (unit.suppression <= 0) this.effects.popup(unit.x, unit.y - 18, 'SUPPRESSED', '#e4b37d');
       unit.suppression = Math.max(unit.suppression, source.suppression);
     }
@@ -342,30 +432,35 @@ export class Battlefield extends (Phaser?.Scene || class {}) {
     const muzzleAngle = hostile && source.type === 'tank' && Number.isFinite(source.turretRotation)
       ? source.turretRotation
       : hostile && !source.airborne && Number.isFinite(source.sprite?.rotation) ? source.sprite.rotation : angle;
-    const muzzleDistance = source.muzzleDistance || 25;
+    const fiftyCal = !hostile && source.type === 'sniper' && source.specialUpgrades?.fiftycal;
+    const muzzleDistance = source.muzzleDistance || (fiftyCal ? 34 : 25);
     const muzzle = { x: source.x + Math.cos(muzzleAngle) * muzzleDistance, y: source.y + Math.sin(muzzleAngle) * muzzleDistance };
     const splash = hostile ? (source.type === 'tank' ? 45 : 0) : source.splash;
     const damage = hostile ? source.attackDamage : source.damage;
-    this.projectiles.push({ ...muzzle, target, source, hostile, damage, splash, speed: splash ? 310 : 680, life: 2, angle, color: hostile ? 0xf8a083 : source.specialUpgrades?.laser ? 0xff8b88 : source.type === 'sniper' || source.type === 'aa' ? 0xc3f0ec : 0xffe2a0 });
+    const projectileSpeed = splash ? 310 : fiftyCal ? 1100 : 680;
+    this.projectiles.push({ ...muzzle, target, source, hostile, damage, splash, speed: projectileSpeed, life: 2, angle, color: hostile ? 0xf8a083 : source.specialUpgrades?.laser ? 0xff8b88 : source.type === 'sniper' || source.type === 'aa' ? 0xc3f0ec : 0xffe2a0 });
     this.effects.flash(muzzle.x, muzzle.y);
+    if (!hostile && source.type === 'machinegun') this.effects.casing(source.x, source.y, angle);
+    if (hostile && source.type === 'tank') source.recoil = 8;
     this.sfx.shot(source, hostile);
   }
   updateProjectiles(dt) {
     for (const p of this.projectiles) {
       p.life -= dt;
-      if (!p.target.alive) { p.life = 0; continue; }
-      p.angle = Math.atan2(p.target.y - p.y, p.target.x - p.x);
+      if (!p.target.alive && !p.impactPoint) p.impactPoint = { x: p.target.x, y: p.target.y };
+      const destination = p.impactPoint || p.target;
+      p.angle = Math.atan2(destination.y - p.y, destination.x - p.x);
       const travel = p.speed * dt;
-      if (distance(p, p.target) <= travel + 9) {
+      if (distance(p, destination) <= travel + 9) {
         if (p.splash) {
-          this.effects.explosion(p.target.x, p.target.y, p.splash); this.sfx.explosion(p.hostile ? 'tank-shell' : 'grenade', p.target);
+          this.effects.explosion(destination.x, destination.y, p.splash); this.sfx.explosion(p.hostile ? 'tank-shell' : 'grenade', destination);
           for (const entity of [...(p.hostile ? this.units : this.enemies)]) {
-            if (distance(entity, p.target) < p.splash && (p.hostile || !entity.airborne)) p.hostile ? this.damageUnit(entity, p.damage, p.source) : this.damageEnemy(entity, p.damage, p.source);
+            if (entity.alive && distance(entity, destination) < p.splash && (p.hostile || !entity.airborne)) p.hostile ? this.damageUnit(entity, p.damage, p.source) : this.damageEnemy(entity, p.damage, p.source);
           }
-        } else {
+        } else if (p.target.alive) {
           this.sfx.hit(p.target);
           p.hostile ? this.damageUnit(p.target, p.damage, p.source) : this.damageEnemy(p.target, p.damage, p.source);
-        }
+        } else { this.sfx.hit(p.target); this.effects.hit(destination.x, destination.y); }
         p.life = 0;
       } else { p.x += Math.cos(p.angle) * travel; p.y += Math.sin(p.angle) * travel; }
     }
@@ -398,22 +493,44 @@ export class Battlefield extends (Phaser?.Scene || class {}) {
         if (unit.type === 'machinegun') {
           unit.heat = Math.max(0, unit.heat - dt * SENTRY_COOL_RATE);
           if (unit.overheated && unit.heat <= .35) unit.overheated = false;
+          unit.smokeCooldown = (unit.smokeCooldown || 0) - dt;
+          if (unit.overheated && unit.smokeCooldown <= 0) { this.effects.smoke(unit.x, unit.y - 9); unit.smokeCooldown = .18; }
         }
         unit.cooldown -= dt * (unit.suppression > 0 ? .55 : 1);
-        const candidates = this.enemies.filter(enemy => enemy.alive && !enemy.pending && Boolean(SOLDIER_TYPES[unit.type].airTargets) === Boolean(enemy.airborne) && distance(unit, enemy) <= unit.range);
-        const target = candidates.reduce((best, enemy) => !best || (enemy.airborne ? enemy.x > best.x : enemy.roadDistance > best.roadDistance) ? enemy : best, null);
-        if (target) {
-          unit.sprite.rotation = lerpAngle(unit.sprite.rotation, Math.atan2(target.y - unit.y, target.x - unit.x), Math.min(1, dt * 14));
-          if (unit.cooldown <= 0 && !unit.overheated) {
-            this.fire(unit, target); unit.cooldown = 1 / unit.fireRate;
-            if (unit.type === 'machinegun') {
-              unit.heat = Math.min(1, unit.heat + SENTRY_HEAT_PER_SHOT);
-              if (unit.heat >= 1) unit.overheated = true;
+        if (unit.type === 'medic') {
+          const patients = this.units.filter(patient => patient !== unit && patient.alive && patient.health < patient.maxHealth && distance(unit, patient) <= unit.range);
+          if (patients.length) {
+            const focus = patients.reduce((mostInjured, candidate) => candidate.health / candidate.maxHealth < mostInjured.health / mostInjured.maxHealth ? candidate : mostInjured);
+            unit.sprite.rotation = lerpAngle(unit.sprite.rotation, Math.atan2(focus.y - unit.y, focus.x - unit.x), Math.min(1, dt * 10));
+            if (unit.cooldown <= 0) {
+              this.effects.heal(unit.x, unit.y);
+              for (const patient of patients) {
+                const restored = Math.min(unit.healing, patient.maxHealth - patient.health);
+                patient.health += restored;
+                this.effects.healMark(patient.x, patient.y);
+              }
+              unit.cooldown = 1 / unit.fireRate;
+            }
+          }
+        } else {
+          const candidates = this.enemies.filter(enemy => enemy.alive && !enemy.pending && (enemy.airborne || enemy.x >= 0)
+            && Boolean(SOLDIER_TYPES[unit.type].airTargets) === Boolean(enemy.airborne) && distance(unit, enemy) <= unit.range);
+          const target = selectDefenderTarget(unit, candidates);
+          if (target) {
+            unit.sprite.rotation = lerpAngle(unit.sprite.rotation, Math.atan2(target.y - unit.y, target.x - unit.x), Math.min(1, dt * 14));
+            if (unit.cooldown <= 0 && !unit.overheated) {
+              this.fire(unit, target); unit.cooldown = 1 / unit.fireRate;
+              if (unit.type === 'machinegun') {
+                unit.heat = Math.min(1, unit.heat + SENTRY_HEAT_PER_SHOT);
+                if (unit.heat >= 1) unit.overheated = true;
+              }
             }
           }
         }
+        const status = unit.overheated ? 'OVERHEATED' : unit.suppression > 0 ? `SUPPRESSED ${unit.suppression.toFixed(1)}` : '';
+        unit.status.setPosition(unit.x, unit.y - 36).setText(status).setVisible(Boolean(status));
         if (unit.hitTime > 0) { unit.hitTime -= dt; unit.sprite.setAlpha(.6); }
-        else unit.sprite.setAlpha(unit.suppression > 0 ? .82 : 1);
+        else unit.sprite.setAlpha(unit.suppression > 0 ? .82 : unit.health < unit.maxHealth * .25 ? .72 + Math.sin(this.elapsed * 10) * .18 : 1);
       }
       for (const enemy of [...this.enemies]) {
         if (enemy.pending) continue;
@@ -421,10 +538,11 @@ export class Battlefield extends (Phaser?.Scene || class {}) {
           enemy.x += enemy.speed * dt;
           enemy.y = enemy.airLane + Math.sin(enemy.x / 105 + enemy.phase) * 13;
         }
-        enemy.sprite.setVisible(true).setDepth(enemy.airborne ? 40 : 10 + enemy.y / 1000);
+        const enteredField = enemy.airborne || enemy.x >= FIELD_VISIBILITY_X;
+        enemy.sprite.setVisible(enteredField).setDepth(enemy.airborne ? 40 : 10 + enemy.y / 1000);
         enemy.sprite.setPosition(enemy.x, enemy.y).setScale(enemy.scale, enemy.scale * (1 + (!enemy.airborne && enemy.type !== 'tank' ? Math.sin(this.elapsed * 14 + enemy.phase) * .035 : 0)));
-        enemy.shadow.setVisible(true).setPosition(enemy.x + 6, enemy.y + (enemy.airborne ? 38 : 9)).setDepth(2 + enemy.y / 1000);
-        if (enemy.rotor) { enemy.rotor.setPosition(enemy.x - 3, enemy.y); enemy.rotor.rotation += dt * 35; }
+        enemy.shadow.setVisible(enteredField).setPosition(enemy.x + 6, enemy.y + (enemy.airborne ? 38 : 9)).setDepth(2 + enemy.y / 1000);
+        if (enemy.rotor) { enemy.rotor.setPosition(enemy.x - 3 * enemy.scale, enemy.y); enemy.rotor.rotation += dt * 35; }
         const target = selectEnemyTarget(enemy, this.units);
         let aimError = 0;
         if (enemy.turret) {
@@ -432,7 +550,8 @@ export class Battlefield extends (Phaser?.Scene || class {}) {
           const desiredAngle = target ? Math.atan2(target.y - enemy.y, target.x - enemy.x) : enemy.heading;
           enemy.turretRotation = lerpAngle(enemy.turretRotation, desiredAngle, Math.min(1, dt * TANK_TURRET_TURN_SPEED));
           aimError = Math.abs(Math.atan2(Math.sin(desiredAngle - enemy.turretRotation), Math.cos(desiredAngle - enemy.turretRotation)));
-          enemy.turret.setVisible(true).setPosition(enemy.x, enemy.y).setScale(enemy.scale).setRotation(enemy.turretRotation).setDepth(10.01 + enemy.y / 1000);
+          enemy.recoil = Math.max(0, (enemy.recoil || 0) - dt * 28);
+          enemy.turret.setVisible(enteredField).setPosition(enemy.x - Math.cos(enemy.turretRotation) * enemy.recoil, enemy.y - Math.sin(enemy.turretRotation) * enemy.recoil).setScale(enemy.scale).setRotation(enemy.turretRotation).setDepth(10.01 + enemy.y / 1000);
         } else if (!enemy.airborne) {
           const desiredAngle = target ? Math.atan2(target.y - enemy.y, target.x - enemy.x) : enemy.heading;
           enemy.sprite.rotation = lerpAngle(enemy.sprite.rotation, desiredAngle, Math.min(1, dt * ENEMY_BODY_TURN_SPEED));
@@ -443,6 +562,7 @@ export class Battlefield extends (Phaser?.Scene || class {}) {
         if (enemy.cooldown <= 0 && target && (enemy.airborne || aimError <= fireTolerance)) {
           this.fire(enemy, target, true); enemy.cooldown = enemy.attackCooldown;
         }
+        enemy.armorNoticeCooldown = Math.max(0, (enemy.armorNoticeCooldown || 0) - dt);
         if (enemy.hitTime > 0) { enemy.hitTime -= dt; enemy.sprite.setTint(0xffd5ae); enemy.turret?.setTint(0xffd5ae); }
         else { enemy.sprite.clearTint(); enemy.turret?.clearTint(); }
         if (enemy.airborne ? enemy.x >= 1040 : enemy.roadDistance >= ROAD.length) {
@@ -495,10 +615,15 @@ export class Battlefield extends (Phaser?.Scene || class {}) {
       }
     }
     for (const entity of [...this.units, ...this.enemies]) {
-      if (entity.health === entity.maxHealth && entity !== this.selectedUnit) continue;
+      const hasArmor = entity.maxArmor > 0 && entity.armor > 0;
+      if (entity.health === entity.maxHealth && entity !== this.selectedUnit && !hasArmor) continue;
       const x = entity.x - 15, y = entity.y - (entity.airborne ? 30 : 26);
       health.fillStyle(0x263229, .85).fillRect(x - 1, y - 1, 32, 5);
       health.fillStyle(entity.reward ? 0xdc967b : 0xbfd69c, 1).fillRect(x, y, clamp(entity.health / entity.maxHealth, 0, 1) * 30, 3);
+      if (hasArmor) {
+        health.fillStyle(0x1d2f3d, .9).fillRect(x - 1, y - 7, 32, 5);
+        health.fillStyle(0x55bde8, 1).fillRect(x, y - 6, clamp(entity.armor / entity.maxArmor, 0, 1) * 30, 3);
+      }
     }
     const bullets = this.projectileGraphics.clear();
     for (const p of this.projectiles) {
@@ -511,14 +636,14 @@ export class Battlefield extends (Phaser?.Scene || class {}) {
     this.sfx.setPaused(true);
     this.sfx.ui(won ? 'victory' : 'defeat');
     $('endTitle').textContent = won ? 'The line held.' : 'Outpost lost.';
-    $('endMessage').textContent = won ? 'All 25 waves defeated. Operation Dustfall is a success, commander.' : 'The perimeter has fallen. Regroup, rethink your defenses, and return to the field.';
+    $('endMessage').textContent = won ? 'All 25 waves defeated. The outpost is secure, commander.' : 'The perimeter has fallen. Regroup, rethink your defenses, and return to the field.';
     $('endStats').textContent = `WAVE ${this.waveManager.wave} / 25  ·  ${this.kills} ELIMINATIONS`;
     $('endDialog').showModal(); this.updateHUD();
   }
 }
 
 export function bootstrap() {
-  if (!Phaser) { $('loading').textContent = 'Phaser could not load. Install dependencies with npm install, then restart the server.'; return; }
+  if (!Phaser) { $('loading').textContent = 'Phaser could not load. Install dependencies with pnpm install, then restart the server.'; return; }
   const sfx = new SoundManager();
   const game = new Phaser.Game({
     type: Phaser.AUTO, parent: 'game', width: GAME_CONFIG.width, height: GAME_CONFIG.height,

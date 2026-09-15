@@ -60,7 +60,7 @@ Intentionally silent: hover/focus, disabled native buttons, HUD/resource refresh
 ## Delivering samples
 
 1. Create the paths in [MANIFEST.md](MANIFEST.md) under this folder and place the exact numbered WAV files there. Partial packs work; any available decoded variation is used before procedural audio.
-2. Run `npm run audio:index` (`node scripts/index-audio.js` works directly). The local development server also indexes on startup. If files are added while it is running, re-index and reload the page, or restart the server and reload.
+2. Run `pnpm audio:index` (`node scripts/index-audio.js` works directly). The local development server also indexes on startup. If files are added while it is running, re-index and reload the page, or restart the server and reload.
 3. For static hosting, run the index command before uploading and include `assets/audio/catalog.json`, the referenced files, and the existing application source.
 4. Play the game. The first event may use the immediate fallback while that cue's recordings load. Loading never replays stale combat events later.
 
@@ -91,7 +91,7 @@ mercenaryGame.sfx.setVolume(0.5)
 await mercenaryGame.sfx.preload(['weapon.friendly.rifleman'])
 ```
 
-To add a weapon, add its cue and variations in `src/game/audio/manifest.js`, map its type/upgrade in `weaponCue`, provide a procedural profile if necessary, and run `npm run audio:index`. To add a UI event, trigger `sfx.ui('event-name')` on a successful transition rather than in the render/update loop.
+To add a weapon, add its cue and variations in `src/game/audio/manifest.js`, map its type/upgrade in `weaponCue`, provide a procedural profile if necessary, and run `pnpm audio:index`. To add a UI event, trigger `sfx.ui('event-name')` on a successful transition rather than in the render/update loop.
 
 ## Verification
 

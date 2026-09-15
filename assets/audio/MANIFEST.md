@@ -1,6 +1,6 @@
 # Audio asset manifest
 
-Generated from `src/game/audio/manifest.js` by `npm run audio:index`. Edit that source, not this document.
+Generated from `src/game/audio/manifest.js` by `pnpm audio:index`. Edit that source, not this document.
 
 46 cues; 135 exact sample variations. All are optional at runtime. See README.md for the audit, mix, export and integration instructions.
 
@@ -57,7 +57,7 @@ Heavy .50-caliber report, deeper body and longer tail.
 
 **Trigger:** .50 Cal Sniper upgrade, 0.612 shots/s.
 
-**Mix:** weapons; gain 0.48; pitch 0.96–1.04×; maximum 5 simultaneous voices; minimum interval 28 ms; priority 1.
+**Mix:** weapons; gain 0.64; pitch 0.96–1.04×; maximum 5 simultaneous voices; minimum interval 28 ms; priority 1.
 
 **Export:** WAV PCM, 44.1 or 48 kHz, 16/24-bit; mono preferred for positional cues. Maximum duration 1 seconds.
 

@@ -27,7 +27,7 @@ export function placementError(point, units = [], mines = [], type = 'defender')
     if (!ROAD.lanes.some(offset => Math.abs(offset - road.offset) < UTILITIES.mine.triggerRadius)) return 'Plant the mine closer to a traffic lane.';
   } else {
     if (intersectsRoad(point, radius)) return 'Defenders must be deployed off the road.';
-    if (units.some(unit => distance(point, unit) < radius + (unit.placementRadius || GAME_CONFIG.defenderRadius) + 4)) return 'Leave more space between defenders.';
+    if (units.some(unit => distance(point, unit) < GAME_CONFIG.defenderSpacing)) return 'Leave more space between defenders.';
   }
   return null;
 }

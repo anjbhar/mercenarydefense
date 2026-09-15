@@ -15,4 +15,11 @@ test('the HUD provides one element for every scene DOM binding and control', () 
   assert.match(markup, /id="hint"[^>]*role="status"[^>]*aria-live="polite"/);
   assert.match(markup, /id="mineBtn"[^>]*data-utility="mine"/);
   assert.match(markup, /id="airstrikeBtn"[^>]*data-utility="airstrike"/);
+  assert.match(markup, /Landmine · ground trap \(7\)/);
+  assert.match(markup, /Air strike · area clearance \(8\)/);
+  assert.match(markup, /<title>Mercenary Defense<\/title>/);
+  assert.doesNotMatch(markup, /Operation Dustfall/i);
+  for (const id of ['targetPriority', 'debugPanel', 'debugStats', 'debugWave', 'debugSetWaveBtn', 'debugFunds', 'debugSetFundsBtn']) assert.ok(ids.includes(id));
+  assert.match(markup, /id="debugPanel"[^>]*class="debug-panel hidden"/);
+  for (const id of ['menuBtn', 'menuDialog', 'difficultySelect']) assert.ok(!ids.includes(id));
 });

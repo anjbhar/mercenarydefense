@@ -4,7 +4,7 @@ import { ROAD, sampleRoad, sampleRoadProgress, nearestRoad, insideRoad, intersec
 import { GroundTraffic, initializeGround, groundOverlap, canChangeLane, GROUND_PROFILES } from '../src/game/traffic.js';
 import { placementError, canDeploy, distance } from '../src/game/utils.js';
 import { GAME_CONFIG } from '../src/game/config.js';
-import { SOLDIER_TYPES } from '../src/game/constants.js';
+import { SOLDIER_TYPES, UTILITIES } from '../src/game/constants.js';
 import { getWavePlan } from '../src/game/wave-manager.js';
 
 let serial = 0;
@@ -67,6 +67,8 @@ test('placement includes footprints, road shoulders, structures, boundaries and 
   assert.equal(canDeploy(shoulder, []), true);
   assert.equal(canDeploy(sampleRoad(600, ROAD.halfWidth + 10), []), false);
   assert.equal(canDeploy(shoulder, [shoulder]), false);
+  assert.equal(placementError({ x: 542, y: 190 }, [{ x: 500, y: 190 }]), null);
+  assert.match(placementError({ x: 541, y: 190 }, [{ x: 500, y: 190 }]), /more space/);
   assert.equal(canDeploy({ x: 70, y: 200 }, []), false);
   assert.equal(canDeploy({ x: 1000, y: 220 }, []), false); // vertical sandbags
   assert.equal(canDeploy({ x: 1100, y: 250 }, []), false);
@@ -120,6 +122,14 @@ test('blocked faster traffic follows safely, including a large elapsed step', ()
   assert.ok(fast.roadDistance < center.roadDistance);
 });
 
+test('a trailing overlap cannot pin the lead vehicle in a permanent deadlock', () => {
+  const lead = enemy('infantry', 300, 2, 40), trailing = enemy('infantry', 270, 2, 40);
+  const traffic = new GroundTraffic(), start = lead.roadDistance;
+  advance(traffic, [lead, trailing], 1);
+  assert.ok(lead.roadDistance > start + 30);
+  assert.equal(groundOverlap(lead, trailing), false);
+});
+
 test('congested spawning waits offscreen, admits units safely, and ignores aircraft', () => {
   const traffic = new GroundTraffic(), enemies = [];
   for (let i = 0; i < 18; i++) enemies.push(initializeGround({ type: i % 5 === 0 ? 'tank' : 'infantry', speed: 35, alive: true }, i));
@@ -150,9 +160,10 @@ test('a complete late-wave ground convoy clears both bends without deadlock or o
 });
 
 test('valid road mines can be reached by ground traffic across both road shoulders', () => {
+  assert.equal(UTILITIES.mine.triggerRadius, 35);
   for (let s = 180; s < ROAD.length - 130; s += 90) for (const offset of [-66, -30, 0, 30, 66]) {
     const mine = sampleRoad(s, offset);
     assert.equal(canDeploy(mine, [], [], true), true);
-    assert.ok(ROAD.lanes.some(lane => distance(mine, sampleRoad(s, lane)) < 25));
+    assert.ok(ROAD.lanes.some(lane => distance(mine, sampleRoad(s, lane)) < UTILITIES.mine.triggerRadius));
   }
 });

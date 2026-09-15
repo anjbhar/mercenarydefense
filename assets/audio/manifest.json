@@ -84,7 +84,7 @@
       "description": "Heavy .50-caliber report, deeper body and longer tail.",
       "trigger": ".50 Cal Sniper upgrade, 0.612 shots/s.",
       "bus": "weapons",
-      "gain": 0.48,
+      "gain": 0.64,
       "pitch": [
         0.96,
         1.04

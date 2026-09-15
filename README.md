@@ -1,4 +1,4 @@
-# Mercenary Defense — Operation Dustfall
+# Mercenary Defense
 
 A top-down **Phaser 3** tower defense game with original procedural sprite artwork and a responsive tactical interface.
 
@@ -7,14 +7,14 @@ A top-down **Phaser 3** tower defense game with original procedural sprite artwo
 Requires Node.js 20 or newer.
 
 ```sh
-npm install
-npm run dev
+pnpm install
+pnpm dev
 ```
 
-Open http://localhost:4173. `pnpm install` and `pnpm dev` also work; a pnpm lockfile is included. Phaser 3.90.0 is pinned and served locally. No build step or CDN runtime is required. Optional Google Fonts fall back to system fonts when offline.
+Open http://localhost:4173. Phaser 3.90.0 is pinned by `pnpm-lock.yaml` and served locally. No build step or CDN runtime is required. Optional Google Fonts fall back to system fonts when offline.
 
 ```sh
-npm test
+pnpm test
 ```
 
 ## itch.io upload
@@ -22,28 +22,31 @@ npm test
 Do not ZIP the project folder: it includes `node_modules` and `.git`, which contain thousands of development-only files. On Windows, create the browser upload with:
 
 ```sh
-npm run package:itch
+pnpm package:itch
 ```
 
-Upload `mercenary-defense-itch.zip` to itch.io as an HTML project. The command places `index.html` at the ZIP root, includes only runtime files, and copies the single Phaser browser bundle instead of all of `node_modules`. `npm run build:itch` creates the same unpacked build in `dist/` without making a ZIP.
+Upload `mercenary-defense-itch.zip` to itch.io as an HTML project. The command places `index.html` at the ZIP root, includes only runtime files, and copies the single Phaser browser bundle instead of all of `node_modules`. `pnpm build:itch` creates the same unpacked build in `dist/` without making a ZIP.
 
 ## Play
 
-Protect the eastern outpost through **25 manually started waves**. You start with **$240**, 20 base integrity, and a complimentary two-unit garrison. Place up to 25 defenders on open terrain outside the road, clear of structures and other defenders. Units aim and fire automatically. Ground enemies follow the road from the western entrance to the eastern gate, following or passing slower traffic; helicopters fly independently.
+Protect the eastern outpost through **25 manually started waves**. You start with **$240**, 20 base integrity, and a complimentary two-unit garrison. Place up to 20 defenders on open terrain outside the road, clear of structures and other defenders. Units aim and fire automatically. Ground enemies follow the road from the western entrance to the eastern gate, following or passing slower traffic; helicopters fly independently.
 
-- **1–5**: Select Rifleman, Sniper, Sentry Gun, Grenadier, or AA Gun. Click valid open terrain off the road to deploy. The preview includes the full placement footprint.
-- **6 / 7**: Plant a landmine on the road / call an air strike anywhere in the combat area. Air strikes land after one simulation second.
+- **1–6**: Select Rifleman, Sniper, Sentry Gun, Grenadier, AA Gun, or Medic. Snipers cover nearly the entire battlefield; medics periodically heal every injured friendly unit within range and do not attack. Click valid open terrain off the road to deploy.
+- **7 / 8**: Plant a landmine on the road / call an air strike anywhere in the combat area. Air strikes land after one simulation second.
 - **Click a defender**: Inspect health and kills, buy upgrades, or sell for 65% of invested funds. Complimentary units have no initial resale value.
+- **Target priority**: Each defender targets enemies in the road lane nearest that defender by default, choosing the physically closest contact within that lane. Aircraft use physical distance. Priorities can be set to First, Closest, Strongest, or Weakest.
 - **Space**: Start the next wave, or pause/resume an active wave.
 - **Esc / right click**: Cancel selection.
 - **M**: Toggle audio (samples with procedural fallbacks).
 - **Speed**: Switch between 1× and 2×. **Grid**: Show deployment guides.
 
-Kills and completed waves earn funds. Surviving units recover 10% of maximum health between waves; upgrades fully restore health. Heavy infantry arrive from wave 2, juggernauts from wave 4, tanks from wave 8, and helicopters from wave 14. Some reinforcements arrive in short assault groups. Tanks resist rifles and machine guns, while grenades, mines, air strikes and .50-caliber snipers counter their armor. Juggernauts take half damage from their forward arc. Heavy troops suppress defenders and helicopters prioritize AA guns. Sentry guns build heat while firing and must cool after overheating. Infantry breach damage is 1, helicopters 2, and tanks 3. Clear wave 25 to win; losing all base integrity ends the mission. Restart from the operation report.
+Kills and completed waves earn funds. Surviving units recover 10% of maximum health between waves; upgrades fully restore health. Heavy infantry arrive from wave 2, juggernauts from wave 4, tanks from wave 8, and helicopters from wave 14. Some reinforcements arrive in short assault groups. Tanks resist rifles and machine guns, while grenades, mines, air strikes and .50-caliber snipers counter their armor; .50-caliber rounds also travel substantially faster. Juggernauts carry an armor layer, shown by a blue bar above their health, which must be depleted before they lose health. Heavy troops suppress defenders and helicopters prioritize AA guns. Sentry guns build heat while firing and must cool after overheating. Infantry breach damage is 1, helicopters 2, and tanks 3. Clear wave 25 to win; losing all base integrity ends the mission. Restart from the operation report.
+
+The game opens directly on the battlefield using a single balance profile. Press **F3** to toggle the hidden developer panel, which shows traffic diagnostics, changes available funds, and can set the next wave from 1–25 while no wave is active. It is hidden whenever the game starts or restarts.
 
 ## Art and architecture
 
-All art is original and generated locally with Canvas 2D at startup, then baked into Phaser textures: detailed terrain, a winding supply road, rocks, palms, sandbags, buildings, soldiers, turrets, tanks and helicopters. Phaser handles sprites, input, scaling and the frame loop. Combat has muzzle flashes, tracer rounds, splash explosions, dust, shadows, health bars and floating rewards. Pause and speed changes apply to projectiles, strikes and effects as well as units.
+All art is original and generated locally with Canvas 2D at startup, then baked into Phaser textures: detailed terrain, a winding supply road, rocks, palms, sandbags, buildings, soldiers, upgrade-specific .50-caliber sniper artwork, turrets, tanks and helicopters. Phaser handles sprites, input, scaling and the frame loop. Combat has muzzle flashes, tracer rounds, splash explosions, dust, shadows, health bars and floating rewards. Pause and speed changes apply to projectiles, strikes and effects as well as units.
 
 - `src/game/game.js`: Phaser scene, combat, input and UI integration.
 - `src/game/art.js`: Terrain and sprite texture generation.
@@ -58,7 +61,7 @@ All art is original and generated locally with Canvas 2D at startup, then baked 
 - `src/game/sound.js`: Sample-based Web Audio mixer with procedural fallbacks. See [the audio audit and asset handoff](assets/audio/README.md) and [exact sample manifest](assets/audio/MANIFEST.md).
 - `tests/`: Wave, economy, combat and lifecycle regression checks.
 
-The former unlimited debug bankroll and wave-skip controls have been replaced by a normal campaign economy. Starting resources are configurable in `config.js`.
+Starting resources and the squad limit are configurable in `config.js`; development-only wave and funds controls remain hidden behind F3.
 
 
 ## Road movement and placement
@@ -69,8 +72,8 @@ Five invisible sub-lanes lie within a 150-pixel road corridor. Enemies reserve t
 
 Tanks use larger footprints and following distances, stay in the three central sub-lanes, and turn/change lanes more slowly than infantry. Heavy troops and juggernauts also take more room. Sprite depth follows current Y; shadows remain below units and aircraft stay above ground traffic.
 
-Deployment uses a 33-pixel defender footprint (including the longest barrels) against the road corridor, battlefield boundaries, structures, palms, and other defenders. Mines use an 8-pixel footprint, must fit on the road within reach of a traffic lane, and keep 30 pixels from other mines. The existing 25-pixel trigger distance, blast radius, costs and damage are unchanged. Air-strike bounds and behavior are unchanged. Placement previews outline the road shoulders and explain rejected positions.
+Deployment uses a 33-pixel defender footprint against the road corridor, battlefield boundaries, structures, and palms. Friendly units may be placed as close as 42 pixels center-to-center. Mines use an 8-pixel footprint, must fit on the road within reach of a traffic lane, detect ground enemies within 35 pixels, and keep 30 pixels from other mines. Their blast radius, cost, and damage are unchanged. Air-strike bounds and behavior are unchanged. Placement previews outline the road shoulders and explain rejected positions.
 
 The solid road widened from 135 to 150 pixels to accommodate tank passing. The starter sentry sits off the road at (945,250), with the remaining starter rifleman at (875,228). The current balance pass reduces the opening reserve and income, introduces mixed threats earlier, and adds assault groups, armor, suppression, target priorities and Sentry heat. The shortest defender range still covers useful road sections from either shoulder. Traffic uses conservative footprints and can form queues in tight spaces; it does not dynamically reroute or collide with defenders.
 
-Run `npm test` for deterministic road, traffic, placement, combat, HUD and audio tests. For browser verification, `/tests/road-browser.html` embeds the real game with separate developer-only passing/congestion drills, a wave-22 setup (tanks and aircraft), a five-second simulation advance, and live overlap/corridor diagnostics. Normal speed, 2x, pause, placement, support and dialogs use the normal game controls. These test controls are not part of the main game.
+Run `pnpm test` for deterministic road, traffic, placement, combat, HUD and audio tests. For browser verification, `/tests/road-browser.html` embeds the real game with separate developer-only passing/congestion drills, a wave-22 setup (tanks and aircraft), a five-second simulation advance, and live overlap/corridor diagnostics. Normal speed, 2x, pause, placement, support and dialogs use the normal game controls. These test controls are not part of the main game.

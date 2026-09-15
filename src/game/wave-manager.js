@@ -43,13 +43,17 @@ export class WaveManager {
     if (!this.active || this.game.gameOver) return;
     this.timer -= delta;
     if (this.queue.length && this.timer <= 0) {
-      const next = this.queue.shift();
-      this.game.spawnEnemy(next);
-      this.timer += next.spawnDelay || this.plan.interval;
+      const next = this.queue[0];
+      const hiddenGround = this.game.enemies.filter(enemy => !enemy.airborne && (enemy.pending || enemy.x < 0)).length;
+      if (next.airborne || hiddenGround < 3) {
+        this.queue.shift();
+        this.game.spawnEnemy(next);
+        this.timer += next.spawnDelay || this.plan.interval;
+      }
     }
     if (!this.queue.length && !this.game.enemies.length) {
       this.active = false;
-      this.game.addMoney(this.plan.bonus);
+      this.game.awardWaveBonus ? this.game.awardWaveBonus(this.plan.bonus) : this.game.addMoney(this.plan.bonus);
       if (this.wave === this.finalWave) this.game.finish(true);
       else this.game.onWaveComplete(this.plan);
     }

@@ -9,6 +9,7 @@ export const GROUND_PROFILES = Object.freeze({
   juggernaut: { radius: 33, halfLength: 33, halfWidth: 20, gap: 13, laneRate: 20, laneDelay: 3.8, turnRate: 2.5 },
   tank: { radius: 55, halfLength: 48, halfWidth: 26, gap: 18, laneRate: 10, laneDelay: 7, turnRate: .8 },
 });
+export const GROUND_ENTRY_DISTANCE = 55;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const angleDelta = (a, b) => Math.atan2(Math.sin(b - a), Math.cos(b - a));
 const laneAllowed = (e, lane) => Math.abs(ROAD.lanes[lane]) + e.radius + 2 <= ROAD.halfWidth;
@@ -21,12 +22,12 @@ const overlapsLaterally = (a, b, offset = a.lateralOffset) => {
 
 export function initializeGround(enemy, index = 0, lane) {
   const profile = GROUND_PROFILES[enemy.type] || GROUND_PROFILES.infantry;
-  Object.assign(enemy, profile, { roadDistance: 0, preferredSpeed: enemy.speed, currentSpeed: enemy.speed,
+  Object.assign(enemy, profile, { roadDistance: GROUND_ENTRY_DISTANCE, preferredSpeed: enemy.speed, currentSpeed: enemy.speed,
     trafficId: index, laneCooldown: 0, pending: true });
   const preferred = enemy.type === 'tank' ? 2 : [0, 4, 2, 1, 3][index % 5];
   enemy.subLane = lane ?? (laneAllowed(enemy, preferred) ? preferred : 2);
   enemy.lateralOffset = enemy.targetOffset = ROAD.lanes[enemy.subLane];
-  const p = sampleRoad(0, enemy.lateralOffset);
+  const p = sampleRoad(GROUND_ENTRY_DISTANCE, enemy.lateralOffset);
   enemy.x = p.x; enemy.y = p.y; enemy.heading = p.angle;
   return enemy;
 }
@@ -82,10 +83,10 @@ export class GroundTraffic {
           for (let attempt = 0; attempt < ROAD.lanes.length; attempt++) {
             const lane = (initial + attempt) % ROAD.lanes.length;
             if (!laneAllowed(e, lane)) continue;
-            const offset = ROAD.lanes[lane]; sampleRoad(0, offset, this.point);
+            const offset = ROAD.lanes[lane]; sampleRoad(GROUND_ENTRY_DISTANCE, offset, this.point);
             let clear = true;
             for (const b of active) if (b !== e && !b.pending && (groundOverlap(e, b, this.point.x, this.point.y, this.point.angle, e.gap)
-              || (Math.abs(offset - b.lateralOffset) < e.halfWidth + b.halfWidth + 3 && b.roadDistance < separation(e, b)))) { clear = false; break; }
+              || (Math.abs(offset - b.lateralOffset) < e.halfWidth + b.halfWidth + 3 && b.roadDistance - GROUND_ENTRY_DISTANCE < separation(e, b)))) { clear = false; break; }
             if (clear) {
               e.pending = false; e.subLane = lane; e.lateralOffset = e.targetOffset = offset;
               e.x = this.point.x; e.y = this.point.y; e.heading = this.point.angle; break;
@@ -124,13 +125,30 @@ export class GroundTraffic {
         sampleRoad(nextDistance, offset, this.point);
         const heading = e.heading + clamp(angleDelta(e.heading, this.point.angle) * (1 - Math.exp(-dt * 5)), -e.turnRate * dt, e.turnRate * dt);
         let blocked = false;
-        for (const b of active) if (b !== e && !b.pending && Math.abs(b.roadDistance - nextDistance) < e.radius + b.radius + 10
+        // Only traffic ahead may veto forward travel. Letting a trailing unit
+        // block its leader can pin both forever after a tight merge or turn.
+        for (const b of active) if (b !== e && !b.pending
+          && (b.roadDistance > e.roadDistance || b.roadDistance === e.roadDistance && b.trafficId < e.trafficId)
+          && Math.abs(b.roadDistance - nextDistance) < e.radius + b.radius + 10
           && groundOverlap(e, b, this.point.x, this.point.y, heading)) { blocked = true; break; }
         if (blocked) { e.currentSpeed = 0; continue; }
         e.roadDistance = nextDistance; e.lateralOffset = offset; e.heading = heading;
         e.x = this.point.x; e.y = this.point.y;
       }
     }
+    const admitted = active.filter(enemy => !enemy.pending);
+    const hasVisibleGround = admitted.some(enemy => enemy.x >= -24);
+    if (!hasVisibleGround && admitted.length) {
+      const lead = admitted.reduce((front, enemy) => enemy.roadDistance > front.roadDistance ? enemy : front);
+      lead.ingressStall = Number.isFinite(lead.ingressLastDistance) && lead.roadDistance - lead.ingressLastDistance < .01 ? (lead.ingressStall || 0) + delta : 0;
+      lead.ingressLastDistance = lead.roadDistance;
+      if (lead.ingressStall > 2) {
+        lead.roadDistance = Math.min(ROAD.length, lead.roadDistance + Math.max(6, lead.preferredSpeed * Math.min(delta, .25)));
+        sampleRoad(lead.roadDistance, lead.lateralOffset, this.point);
+        lead.x = this.point.x; lead.y = this.point.y; lead.heading = this.point.angle;
+        lead.currentSpeed = Math.max(lead.currentSpeed, lead.preferredSpeed * .5); lead.ingressStall = 0;
+      }
+    } else for (const enemy of admitted) { enemy.ingressStall = 0; enemy.ingressLastDistance = enemy.roadDistance; }
   }
 }
 

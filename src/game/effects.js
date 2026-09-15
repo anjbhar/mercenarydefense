@@ -14,6 +14,23 @@ export class CombatEffects {
       this.add(this.scene.add.rectangle(x, y, 2, 2, 0xe7c18d).setDepth(50), .25, Math.cos(angle) * 50, Math.sin(angle) * 50, -1);
     }
   }
+  armorHit(x, y) {
+    for (let i = 0; i < 5; i++) this.add(this.scene.add.rectangle(x, y, 5, 2, 0xbfe8dd).setDepth(53), .28, 35 + Math.random() * 45, (Math.random() - .5) * 75, -2);
+  }
+  casing(x, y, angle) {
+    this.add(this.scene.add.rectangle(x, y, 4, 2, 0xd9b66f).setRotation(angle).setDepth(45), .45, -Math.sin(angle) * 35, Math.cos(angle) * 35, 0);
+  }
+  smoke(x, y) {
+    this.add(this.scene.add.image(x, y, 'smoke').setScale(.22).setAlpha(.45).setDepth(46), .65, (Math.random() - .5) * 10, -16, .3);
+  }
+  heal(x, y) {
+    const pulse = this.scene.add.circle(x, y, 18, 0x9ee8b5, .06).setStrokeStyle(1, 0xa9efbe, .55).setDepth(54);
+    this.add(pulse, .32, 0, 0, 12);
+  }
+  healMark(x, y) {
+    const plus = this.scene.add.text(x, y - 20, '+', { fontFamily: 'monospace', fontSize: '15px', fontStyle: 'bold', color: '#9ff0b7', stroke: '#294b35', strokeThickness: 2 }).setOrigin(.5).setDepth(76);
+    this.add(plus, .55, 0, -15);
+  }
   explosion(x, y, radius = 62) {
     this.add(this.scene.add.image(x, y, 'spark').setScale(radius / 10).setDepth(50), .35, 0, 0, 1.5);
     for (let i = 0; i < 15; i++) {

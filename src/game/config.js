@@ -1,12 +1,13 @@
 export const GAME_CONFIG = {
   startingMoney: 240,
   startingHealth: 20,
-  maxDefenders: 25,
+  maxDefenders: 20,
   width: 1200,
   height: 700,
   field: { left: 60, right: 1045, top: 108, bottom: 602 },
   combatArea: { left: 40, right: 1050, top: 105, bottom: 605 },
   defenderRadius: 33, // Covers even the sniper/grenadier barrel at deployment scale.
+  defenderSpacing: 42,
   mineRadius: 8,
   starterDefenders: [
     { type: 'rifleman', x: 875, y: 228 },

@@ -126,30 +126,119 @@ function terrain(c, w, h) {
   vignette.addColorStop(0, '#26382c00'); vignette.addColorStop(1, '#26382c77'); c.fillStyle = vignette; c.fillRect(0, 0, w, h);
 }
 
+function plate(c, points, fill, stroke = '#303b32') {
+  c.beginPath(); points.forEach(([x, y], i) => i ? c.lineTo(x, y) : c.moveTo(x, y)); c.closePath();
+  c.fillStyle = fill; c.fill(); c.strokeStyle = stroke; c.lineWidth = 1; c.stroke();
+}
+
 function tankHullArt(c) {
   c.translate(48, 48);
-  box(c, -24, -22, 49, 12, '#282f2d'); box(c, -24, 11, 49, 12, '#282f2d');
-  for (let x = -22; x < 24; x += 7) { box(c, x, -21, 3, 10, '#555b50'); box(c, x, 12, 3, 10, '#555b50'); }
-  box(c, -22, -15, 43, 31, '#706c50', '#a29a6c'); box(c, -18, -11, 28, 23, '#8c815c', '#aa9c6b');
-  ellipse(c, 0, 0, 14, 13, '#474e3f');
+  // Separate steel track shoes and inset rubber pads keep the silhouette readable.
+  for (const y of [-23, 13]) {
+    plate(c, [[-25, y + 3], [-22, y], [23, y], [27, y + 3], [27, y + 7], [23, y + 10], [-22, y + 10], [-25, y + 7]], '#242a27');
+    for (let x = -22; x < 24; x += 4) {
+      box(c, x, y + 1, 3, 8, '#64695b'); box(c, x, y + 3, 2, 4, '#353d35');
+      line(c, [[x, y + 1], [x + 2, y + 1]], '#a4a18a', .7);
+    }
+  }
+  const armor = c.createLinearGradient(0, -18, 0, 18);
+  armor.addColorStop(0, '#c0ae7c'); armor.addColorStop(.35, '#92865e'); armor.addColorStop(1, '#595b43');
+  plate(c, [[-25, -14], [-20, -18], [20, -18], [28, -11], [28, 11], [20, 18], [-20, 18], [-25, 14]], armor);
+  plate(c, [[-19, -13], [-7, -13], [0, -5], [-3, 12], [-19, 12]], '#6d7451', '#7e805b');
+  plate(c, [[8, -15], [19, -15], [25, -9], [25, 8], [17, 7], [12, -3]], '#a69a6b', '#b4a67a');
+  // Rear engine grille, exhausts, front glacis, and segmented side skirts.
+  box(c, -22, -10, 11, 20, '#3d4739', '#b1a578');
+  for (let y = -8; y <= 8; y += 3) line(c, [[-20, y], [-13, y]], '#7b8262', 1);
+  for (const y of [-18, 14]) {
+    for (let x = -19; x < 21; x += 9) {
+      box(c, x, y, 8, 4, y < 0 ? '#b4a376' : '#6e7050', '#424b39');
+      box(c, x + 1, y, 5, 1, '#c6b98a');
+    }
+  }
+  line(c, [[21, -10], [24, -6], [24, 7], [20, 11]], '#d0bd8c', 1.2);
+  for (const y of [-11, 8]) {
+    box(c, -26, y, 4, 4, '#282f2a', '#858773');
+    box(c, 24, y, 3, 3, '#e0cc8a', '#535843');
+  }
+  ellipse(c, 1, 1, 15, 14, '#303b2e'); ellipse(c, 0, 0, 14, 13, '#686e4e');
+  for (const [x, y] of [[-18, -12], [-18, 12], [19, -12], [19, 12]]) ellipse(c, x, y, 1, 1, '#e0c793');
 }
 
 function tankTurretArt(c) {
   c.translate(48, 48);
-  box(c, -10, -10, 23, 21, '#8f8460', '#b3a370');
-  box(c, 10, -4, 30, 7, '#343d34'); box(c, 36, -5, 7, 9, '#58604b'); ellipse(c, -4, 0, 6, 6, '#535e4b');
+  plate(c, [[-14, -8], [-7, -13], [9, -11], [16, -5], [16, 8], [6, 14], [-11, 12]], '#242e2870', '#242e2840');
+  const armor = c.createLinearGradient(-6, -12, 8, 13);
+  armor.addColorStop(0, '#c5b17d'); armor.addColorStop(.45, '#95845c'); armor.addColorStop(1, '#636447');
+  plate(c, [[-16, -8], [-9, -13], [7, -12], [14, -6], [14, 6], [7, 12], [-10, 11], [-16, 6]], armor);
+  plate(c, [[-11, -8], [-6, -10], [6, -9], [10, -4], [6, 1], [-8, 0]], '#7f8158', '#a6a071');
+  line(c, [[-14, -7], [-8, -11], [6, -10], [11, -6]], '#dec796', 1.2);
+  box(c, 9, -5, 9, 10, '#626b4e', '#ada579');
+  box(c, 16, -3, 23, 6, '#414c3d', '#242f29');
+  box(c, 17, -2, 21, 2, '#a5ac8b');
+  for (const x of [20, 30]) box(c, x, -3, 2, 6, '#707b5d');
+  plate(c, [[36, -4], [42, -4], [43, -2], [43, 2], [42, 4], [36, 4]], '#788169');
+  box(c, 41, -2, 2, 4, '#202d28');
+  ellipse(c, -5, 2, 6, 6, '#414d3b'); ellipse(c, -6, 1, 5, 5, '#a1a17a');
+  line(c, [[-9, 0], [-6, -2], [-3, 0]], '#d6c594'); box(c, -8, 2, 5, 2, '#566345');
+  box(c, 2, -8, 5, 3, '#313f35', '#b2b58b'); box(c, 3, -8, 3, 1, '#86b7ae');
+  for (const y of [-9, 7]) for (let x = -1; x < 7; x += 3) box(c, x, y, 2, 3, '#46513d', '#9f9e75');
+  line(c, [[-12, 6], [-23, 12]], '#28392e', .8); ellipse(c, -12, 6, 1.5, 1.5, '#c0b181');
+  box(c, -15, -5, 3, 7, '#aa654b'); line(c, [[-14, -4], [-14, 0]], '#edc290', 1);
+}
+
+function helicopterArt(c) {
+  c.translate(48, 48);
+  // Undercarriage and armed stub wings sit beneath the faceted fuselage.
+  for (const side of [-1, 1]) {
+    c.save(); c.scale(1, side);
+    line(c, [[-12, 16], [19, 16], [23, 13]], '#263a33', 2.5);
+    line(c, [[-6, 9], [-3, 16]], '#88967a', 1.5); line(c, [[12, 8], [15, 16]], '#88967a', 1.5);
+    plate(c, [[-11, 7], [2, 7], [6, 23], [-5, 22]], '#5d6b50');
+    box(c, -7, 19, 15, 6, '#2d3d35', '#94a181'); box(c, -5, 20, 11, 2, '#768364');
+    for (const y of [20.5, 23.5]) ellipse(c, 7, y, 1, 1, '#172a28');
+    c.restore();
+  }
+  plate(c, [[-13, -5], [-39, -2], [-42, -5], [-41, 5], [-37, 3], [-13, 6]], '#76866a');
+  line(c, [[-35, -1], [-16, -3]], '#bac2a0', 1);
+  plate(c, [[-39, -2], [-41, -13], [-35, -11], [-31, 0], [-35, 10], [-41, 11]], '#4b6050');
+  line(c, [[-39, -10], [-36, -9]], '#c39b64', 2);
+  const body = c.createLinearGradient(0, -12, 0, 13);
+  body.addColorStop(0, '#b0bd96'); body.addColorStop(.35, '#7f9271'); body.addColorStop(1, '#3c5545');
+  plate(c, [[-20, -5], [-13, -10], [5, -11], [20, -7], [29, -2], [29, 3], [20, 8], [4, 12], [-13, 10], [-20, 5]], body);
+  for (const y of [-8, 5]) {
+    box(c, -17, y, 15, 4, '#4d614a', '#9fab86'); box(c, -19, y, 5, 4, '#253c34');
+    for (let x = -11; x < -3; x += 2) line(c, [[x, y + 1], [x, y + 3]], '#263e33');
+  }
+  const glass = c.createLinearGradient(8, -7, 24, 8);
+  glass.addColorStop(0, '#a1ddd1'); glass.addColorStop(.35, '#4b8a87'); glass.addColorStop(1, '#193c42');
+  plate(c, [[6, -8], [18, -6], [26, -2], [25, 2], [8, 0]], glass);
+  plate(c, [[8, 2], [25, 4], [18, 7], [6, 9]], '#365d60');
+  line(c, [[9, -6], [17, -5], [21, -3]], '#cfefe0', 1);
+  line(c, [[5, -9], [7, 0], [5, 10]], '#bdc5a0', 1.3);
+  ellipse(c, 27, 3, 3, 3, '#2b3f36'); line(c, [[27, 3], [33, 3]], '#23372e', 2);
+  box(c, -25, -2, 3, 5, '#c0b385'); box(c, -29, -1, 2, 3, '#aa694e');
+  ellipse(c, -4, -23, 1.4, 1.2, '#ef9171'); ellipse(c, -4, 23, 1.4, 1.2, '#9acbbb');
+  // Tail rotor is deliberately compact so it does not compete with the main rotor.
+  ellipse(c, -38, 0, 7, 7, '#c8d3b526');
+  line(c, [[-43, -4], [-33, 4]], '#bdc5aa', 1.2); line(c, [[-42, 5], [-34, -5]], '#bdc5aa', 1.2);
+  ellipse(c, -38, 0, 1.8, 1.8, '#253b31'); ellipse(c, -3, 0, 5, 5, '#263d32');
+}
+
+function helicopterRotorArt(c) {
+  c.translate(48, 48);
+  for (let i = 0; i < 4; i++) {
+    c.save(); c.rotate(i * Math.PI / 2);
+    c.beginPath(); c.arc(0, 0, 43, -.23, .03); c.strokeStyle = '#d6dfc315'; c.lineWidth = 3; c.stroke();
+    plate(c, [[4, -1], [15, -2], [44, -1], [43, 2], [13, 1], [4, 1]], '#405448aa', '#aab99b66');
+    line(c, [[38, -.5], [43, -.3]], '#ddcca7aa', 1.5); c.restore();
+  }
+  ellipse(c, 0, 0, 4, 4, '#304337'); ellipse(c, 0, 0, 2.5, 2.5, '#d0d1aa');
+  ellipse(c, -.5, -.5, 1, 1, '#f0edc9');
 }
 
 function unitArt(c, type, color, enemy = false) {
   c.translate(48, 48);
   const dark = enemy ? '#4c3c36' : '#303d39';
-  if (type === 'helicopter') {
-    box(c, -39, -3, 39, 6, '#6f7560'); box(c, -38, -12, 5, 25, '#434f46');
-    ellipse(c, 2, 0, 22, 12, '#68745f'); ellipse(c, 12, 0, 13, 9, '#3b5554');
-    line(c, [[-12, -16], [19, -16]], '#2d3934', 3); line(c, [[-12, 16], [19, 16]], '#2d3934', 3);
-    line(c, [[-2, -18], [-2, 18]], '#acaa85', 2); ellipse(c, -3, 0, 5, 5, '#b0aa83');
-    return;
-  }
   if (type === 'machinegun' || type === 'aa') {
     for (let angle = 0; angle < 6.28; angle += 2.094) {
       line(c, [[0, 0], [Math.cos(angle) * 23, Math.sin(angle) * 23]], '#303d37', 7);
@@ -168,22 +257,37 @@ function unitArt(c, type, color, enemy = false) {
   ellipse(c, 1, -11, 8, 7, color); ellipse(c, 1, 11, 8, 7, color);
   line(c, [[5, -10], [15, -5], [17, 2]], color, 7); line(c, [[5, 12], [14, 10], [19, 3]], color, 6);
   ellipse(c, 17, 1, 3, 4, '#c2ab7b');
-  box(c, 8, -2, type === 'sniper' ? 31 : 23, type === 'grenadier' ? 8 : 5, '#26332e');
-  box(c, 18, -2, 7, 3, '#869082');
-  if (type === 'sniper') box(c, 13, -5, 10, 3, '#263932');
-  if (type === 'grenadier') { box(c, 26, -4, 11, 11, '#7e8258'); box(c, 36, -2, 5, 7, '#b5ad73'); }
+  if (type === 'fiftycal') {
+    // A slightly heavier receiver, compact scope and small bulb muzzle distinguish the upgrade without overpowering the soldier.
+    box(c, 6, -4, 22, 8, '#26332e', '#718078');
+    box(c, 11, -7, 12, 3, '#263936', '#87948c');
+    box(c, 27, -2, 13, 5, '#34433e', '#1d2927');
+    ellipse(c, 42, .5, 4.5, 5, '#505d56', '#202a27');
+  } else if (type === 'medic') {
+    box(c, 7, -10, 20, 20, '#d9e1d4', '#526658');
+    box(c, 15, -7, 5, 14, '#bd5e55'); box(c, 11, -3, 13, 6, '#bd5e55');
+  } else {
+    box(c, 8, -2, type === 'sniper' ? 31 : 23, type === 'grenadier' ? 8 : 5, '#26332e');
+    box(c, 18, -2, 7, 3, '#869082');
+    if (type === 'sniper') box(c, 13, -5, 10, 3, '#263932');
+    if (type === 'grenadier') { box(c, 26, -4, 11, 11, '#7e8258'); box(c, 36, -2, 5, 7, '#b5ad73'); }
+  }
   ellipse(c, -1, 1, 10, 11, '#37473a'); ellipse(c, -2, -1, 10, 10, color);
   c.beginPath(); c.arc(-2, -1, 8, Math.PI, Math.PI * 1.8); c.strokeStyle = '#edf0c66b'; c.lineWidth = 2; c.stroke();
   box(c, 5, -5, 4, 9, '#3b4e42'); line(c, [[-7, 0], [-2, -4], [2, -3]], enemy ? '#9b7960' : '#70815a', 3);
+  if (type === 'medic') { box(c, -14, -9, 9, 18, '#d6ddd0', '#506052'); box(c, -12, -3, 5, 6, '#bd5e55'); }
   if (type === 'juggernaut' || type === 'heavy') { box(c, -5, -8, 9, 15, '#75614f', '#b29875'); box(c, 5, -5, 5, 9, '#dd8b68'); }
 }
 
 export function createArt(scene) {
   canvasTexture(scene, 'terrain', 1200, 700, terrain);
   for (const [type, definition] of Object.entries(SOLDIER_TYPES)) canvasTexture(scene, type, 96, 96, c => unitArt(c, type, definition.color));
-  for (const [type, color] of Object.entries({ infantry: '#ac7860', heavy: '#956f57', juggernaut: '#756756', helicopter: '#70826a' })) canvasTexture(scene, type, 96, 96, c => unitArt(c, type, color, true));
+  canvasTexture(scene, 'sniper-fiftycal', 96, 96, c => unitArt(c, 'fiftycal', SOLDIER_TYPES.sniper.color));
+  for (const [type, color] of Object.entries({ infantry: '#ac7860', heavy: '#956f57', juggernaut: '#756756' })) canvasTexture(scene, type, 96, 96, c => unitArt(c, type, color, true));
   canvasTexture(scene, 'tank-hull', 96, 96, tankHullArt);
   canvasTexture(scene, 'tank-turret', 96, 96, tankTurretArt);
+  canvasTexture(scene, 'helicopter', 96, 96, helicopterArt);
+  canvasTexture(scene, 'helicopter-rotor', 96, 96, helicopterRotorArt);
   canvasTexture(scene, 'shadow', 80, 80, c => { const g = c.createRadialGradient(40, 40, 2, 40, 40, 36); g.addColorStop(0, '#182a2370'); g.addColorStop(1, '#182a2300'); ellipse(c, 40, 40, 36, 28, g); });
   canvasTexture(scene, 'mine', 48, 48, c => { ellipse(c, 26, 28, 16, 10, '#32382955'); ellipse(c, 24, 24, 14, 10, '#485646'); ellipse(c, 24, 21, 12, 8, '#899276'); ellipse(c, 24, 20, 5, 4, '#465644'); ellipse(c, 24, 19, 2, 2, '#e3b26b'); });
   canvasTexture(scene, 'spark', 24, 24, c => { const g = c.createRadialGradient(12, 12, 0, 12, 12, 12); g.addColorStop(0, '#fffde8'); g.addColorStop(.2, '#ffe6a4'); g.addColorStop(1, '#ff9c3000'); ellipse(c, 12, 12, 12, 12, g); });

@@ -1,4 +1,4 @@
-// Authoritative asset contract. Run `npm run audio:index` after adding recordings
+// Authoritative asset contract. Run `pnpm audio:index` after adding recordings
 // or editing this file to refresh the published manifest and available-file index.
 const cues = {};
 function cue(id, folder, name, variations, description, trigger, options = {}) {
@@ -32,6 +32,7 @@ const friendly = [
 ];
 for (const [name, count, description, trigger] of friendly) {
   cue(`weapon.friendly.${name}`, 'weapons/friendly', name, count, description, trigger, {
+    gain: name === 'fiftycal' ? .64 : .48,
     fallback: { kind: 'gun', profile: name },
   });
 }

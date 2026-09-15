@@ -19,7 +19,7 @@ export async function indexAudioAssets() {
   await writeChanged('manifest.json', JSON.stringify(AUDIO_MANIFEST, null, 2) + '\n');
   const lines = [
     '# Audio asset manifest', '',
-    'Generated from `src/game/audio/manifest.js` by `npm run audio:index`. Edit that source, not this document.', '',
+    'Generated from `src/game/audio/manifest.js` by `pnpm audio:index`. Edit that source, not this document.', '',
     `${Object.keys(AUDIO_MANIFEST.cues).length} cues; ${expected.length} exact sample variations. All are optional at runtime. See README.md for the audit, mix, export and integration instructions.`, '',
     'Every numbered file is a different performance/timbre variation of the same event, not a sequential part. Weapons are single attacks, never firing loops. Explosions are separate assets.', '',
   ];

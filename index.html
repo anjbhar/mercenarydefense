@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#171e1a" />
-  <title>Mercenary Defense — Operation Dustfall</title>
+  <title>Mercenary Defense</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23171e1a'/%3E%3Cpath d='M8 7h16v13l-8 6-8-6z' fill='none' stroke='%23d8bb7e' stroke-width='3'/%3E%3C/svg%3E" />
   <link rel="stylesheet" href="./styles.css" />
 </head>
@@ -13,7 +13,7 @@
     <div id="game" aria-label="Interactive battlefield. Select a defender, then click to deploy."></div>
 
     <header class="top-hud" data-hud-blocker aria-label="Mission status and controls">
-      <div class="identity"><span class="insignia" aria-hidden="true">M</span><div><h1>Mercenary Defense</h1><span>Operation Dustfall</span></div></div>
+      <div class="identity"><span class="insignia" aria-hidden="true">M</span><div><h1>Mercenary Defense</h1></div></div>
       <div class="hud-stat wave-stat"><div><span class="label">Wave</span><strong><span id="wave">00</span><small> / 25</small></strong></div><div id="waveDots" class="wave-dots" aria-hidden="true"></div><span id="waveStatus" class="sr-only">Awaiting your command</span></div>
       <div class="hud-stat hostiles-stat"><span class="label">Contacts</span><strong id="enemyCount">0 HOSTILES</strong></div>
       <div class="hud-stat funds-stat"><span class="label">Funds</span><strong>$<span id="money">240</span></strong></div>
@@ -35,24 +35,33 @@
     <section id="selectionPanel" class="selection-panel hidden" data-hud-blocker aria-label="Selected defender">
       <button id="closeSelectionBtn" class="control-button icon-button close-selection" aria-label="Close unit selection" title="Close (Esc)">×</button>
       <div class="selected-unit"><img id="selectedPortrait" alt="" /><div><span class="label">Unit selected</span><h2 id="selectedName"></h2></div></div>
-      <dl id="selectedStats" class="selected-stats"><div><dt>HP</dt><dd id="selectedHP"></dd></div><div><dt>Damage</dt><dd id="selectedDamage"></dd></div><div><dt>Kills</dt><dd id="selectedKills"></dd></div></dl>
+      <dl id="selectedStats" class="selected-stats"><div><dt>HP</dt><dd id="selectedHP"></dd></div><div><dt id="selectedPowerLabel">Damage</dt><dd id="selectedDamage"></dd></div><div><dt>Kills</dt><dd id="selectedKills"></dd></div></dl>
+      <label id="targetControl" class="target-control">Target <select id="targetPriority"><option value="first">First</option><option value="closest" selected>Closest</option><option value="strongest">Strongest</option><option value="weakest">Weakest</option></select></label>
       <div class="selection-actions"><button id="upgradeBtn" class="primary-button"></button><button id="sellBtn" class="secondary-button"></button></div>
     </section>
 
     <div id="statusStrip" class="status-strip"><span aria-hidden="true">⌖</span><span id="hint" role="status" aria-live="polite">Select a defender, then click the battlefield to deploy.</span><span class="cancel-hint"><kbd>ESC</kbd> Cancel</span></div>
     <section class="deployment-dock" data-hud-blocker aria-label="Deploy units and start waves">
-      <div id="shop" class="unit-shop" role="group" aria-label="Defenders, shortcuts 1 to 5"></div>
+      <div id="shop" class="unit-shop" role="group" aria-label="Defenders, shortcuts 1 to 6"></div>
       <div class="support-controls" role="group" aria-label="Tactical support">
-        <button id="mineBtn" class="deploy-button support-button" data-utility="mine" aria-label="Deploy landmine, $40" aria-pressed="false" title="Landmine · ground trap (6)"><kbd>6</kbd><span class="support-icon" aria-hidden="true">⊙</span><span class="unit-name">Landmine</span><span class="unit-price">$40</span></button>
-        <button id="airstrikeBtn" class="deploy-button support-button" data-utility="airstrike" aria-label="Call air strike, $140" aria-pressed="false" title="Air strike · area clearance (7)"><kbd>7</kbd><span class="support-icon" aria-hidden="true">✈</span><span class="unit-name">Air strike</span><span class="unit-price">$140</span></button>
+        <button id="mineBtn" class="deploy-button support-button" data-utility="mine" aria-label="Deploy landmine, $40" aria-pressed="false" title="Landmine · ground trap (7)"><kbd>7</kbd><span class="support-icon" aria-hidden="true">⊙</span><span class="unit-name">Landmine</span><span class="unit-price">$40</span></button>
+        <button id="airstrikeBtn" class="deploy-button support-button" data-utility="airstrike" aria-label="Call air strike, $140" aria-pressed="false" title="Air strike · area clearance (8)"><kbd>8</kbd><span class="support-icon" aria-hidden="true">✈</span><span class="unit-name">Air strike</span><span class="unit-price">$140</span></button>
       </div>
-      <div class="wave-action"><button id="startWaveBtn" class="primary-button start-button"><span>Start wave 01</span><span aria-hidden="true">→</span></button><span class="squad-count">Squad <strong id="unitCount">2 / 25</strong></span></div>
+      <div class="wave-action"><button id="startWaveBtn" class="primary-button start-button"><span>Start wave 01</span><span aria-hidden="true">→</span></button><span class="squad-count">Squad <strong id="unitCount">2 / 20</strong></span></div>
     </section>
 
     <div id="pauseOverlay" class="pause-overlay hidden"><div class="pause-message" data-hud-blocker><span class="label">Tactical pause</span><h2>Operation paused.</h2><p>Resume when you're ready to hold the line.</p><button id="resumeBtn" class="primary-button">Resume operation</button><small><kbd>SPACE</kbd> to resume</small></div></div>
     <div id="loading" class="loading" role="status">ESTABLISHING UPLINK…</div>
+    <aside id="debugPanel" class="debug-panel hidden" data-hud-blocker aria-label="Developer controls">
+      <strong>F3 DIAGNOSTICS</strong>
+      <pre id="debugStats" aria-live="off"></pre>
+      <label for="debugWave">Next wave</label>
+      <div class="debug-value-control"><input id="debugWave" type="number" min="1" max="25" value="1" /><button id="debugSetWaveBtn" type="button">Set</button></div>
+      <label for="debugFunds">Funds</label>
+      <div class="debug-value-control"><input id="debugFunds" type="number" min="0" max="9999999" value="240" /><button id="debugSetFundsBtn" type="button">Set</button></div>
+    </aside>
   </main>
-  <dialog id="helpDialog"><button id="closeHelpBtn" class="dialog-close icon-button" aria-label="Close help">×</button><span class="eyebrow">FIELD MANUAL / 01</span><h2>Welcome, commander.</h2><p>Defend the eastern outpost through 25 enemy waves. A two-unit garrison is already holding the perimeter.</p><ol><li><strong>Build your defense.</strong> Choose a unit (1–5), then deploy on open terrain off the road. The circle shows its firing range.</li><li><strong>Engage on your terms.</strong> Start each wave when ready. Ground enemies follow the road from the west and fire at your units.</li><li><strong>Adapt and upgrade.</strong> Select a deployed unit to upgrade or sell it. Tanks resist small arms, while juggernauts are weakest from the sides and rear.</li><li><strong>Use your support.</strong> Plant mines (6) on the road for ground enemies, or call an air strike (7). AA guns target helicopters, arriving on wave 14.</li></ol><p class="manual-keys">SPACE start / pause · ESC cancel · M mute · 1–7 select</p><button id="helpDoneBtn" class="primary-button">Ready for deployment →</button></dialog>
+  <dialog id="helpDialog"><button id="closeHelpBtn" class="dialog-close icon-button" aria-label="Close help">×</button><span class="eyebrow">FIELD MANUAL / 01</span><h2>Welcome, commander.</h2><p>Defend the eastern outpost through 25 enemy waves. A two-unit garrison is already holding the perimeter.</p><ol><li><strong>Build your defense.</strong> Choose a unit (1–6), then deploy on open terrain off the road. Medics heal injured allies within range instead of attacking.</li><li><strong>Engage on your terms.</strong> Start each wave when ready. Ground enemies follow the road from the west and fire at your units.</li><li><strong>Adapt and upgrade.</strong> Select a deployed unit to upgrade or sell it. Tanks resist small arms, while a juggernaut's blue armor bar must be depleted before its health.</li><li><strong>Use your support.</strong> Plant mines (7) on the road for ground enemies, or call an air strike (8). AA guns target helicopters, arriving on wave 14.</li></ol><p class="manual-keys">SPACE start / pause · ESC cancel · M mute · 1–8 select</p><button id="helpDoneBtn" class="primary-button">Ready for deployment →</button></dialog>
   <dialog id="endDialog"><span class="eyebrow">OPERATION REPORT</span><h2 id="endTitle">Outpost lost.</h2><p id="endMessage"></p><div class="end-stats" id="endStats"></div><button id="restartBtn" class="primary-button">Deploy again →</button></dialog>
   <script src="./node_modules/phaser/dist/phaser.min.js"></script>
   <script type="module" src="./main.js"></script>

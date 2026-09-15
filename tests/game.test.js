@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { getWavePlan, WaveManager } from '../src/game/wave-manager.js';
 import { GAME_CONFIG } from '../src/game/config.js';
+import { SOLDIER_TYPES } from '../src/game/constants.js';
 import { canDeploy, sellValue } from '../src/game/utils.js';
 import { createUnit, createEnemy } from '../src/game/models.js';
 import { CombatEffects } from '../src/game/effects.js';
@@ -24,8 +25,9 @@ function display(x = 0, y = 0) {
   return { x, y, alpha: 1, scaleX: 1, rotation: 0, visible: true, destroyed: false,
     setScale(value) { this.scaleX = value; return this; }, setDepth(value) { this.depth = value; return this; },
     setRotation(value) { this.rotation = value; return this; }, setAlpha(value) { this.alpha = value; return this; },
-    setPosition(x, y) { this.x = x; this.y = y; return this; },
+    setPosition(x, y) { this.x = x; this.y = y; return this; }, setText(value) { this.text = value; return this; },
     setTint(value) { this.tint = value; return this; }, clearTint() { this.tint = null; return this; }, setVisible(value) { this.visible = value; return this; },
+    setTexture(value) { this.texture = value; return this; },
     setOrigin() { return this; }, setStrokeStyle() { return this; }, clear() { return this; },
     destroy() { this.destroyed = true; },
   };
@@ -104,6 +106,15 @@ test('campaign advances only after the last enemy, pays each bonus once, and win
   assert.equal(g.waveManager.startWave(), false);
 });
 
+test('wave 12 burst traffic completes without leaving a hidden or stalled enemy', () => {
+  const g = game(); g.health = 1e6; g.waveManager.wave = 11;
+  assert.equal(g.waveManager.startWave(), true);
+  for (let step = 0; step < 4000 && g.waveManager.active; step++) g.update(0, 50);
+  assert.equal(g.waveManager.queue.length, 0);
+  assert.equal(g.enemies.length, 0);
+  assert.equal(g.waveManager.active, false);
+});
+
 test('deployment respects the perimeter, spacing, money, and the squad limit', () => {
   const g = game();
   assert.equal(canDeploy({ x: 40, y: 350 }, []), false);
@@ -113,7 +124,7 @@ test('deployment respects the perimeter, spacing, money, and the squad limit', (
   g.choose('sniper'); g.handleFieldClick(510, 190); assert.equal(g.money, 300);
   g.money = 0; g.handleFieldClick(300, 350); assert.equal(g.units.length, 1);
   g.money = 1000; g.units = Array.from({ length: GAME_CONFIG.maxDefenders }, (_, i) => ({ x: 100 + i, y: 180 }));
-  g.selectedType = 'rifleman'; g.handleFieldClick(500, 190); assert.equal(g.units.length, 25); assert.equal(g.money, 1000);
+  g.selectedType = 'rifleman'; g.handleFieldClick(500, 190); assert.equal(g.units.length, 20); assert.equal(g.money, 1000);
 });
 
 test('upgrades charge once per stage, restore health and preserve resale investment', () => {
@@ -135,14 +146,96 @@ test('unaffordable and paused upgrades do not alter the unit', () => {
   assert.equal(u.level, 0); assert.equal(g.units.length, 1); assert.equal(g.money, 350);
 });
 
-test('AA targets aircraft exclusively; ground defenders prioritize the closest breach', () => {
-  const g = game(); const rifle = unit(g); const aa = unit(g, 'aa', 550, 350);
-  const back = enemy(g, 'infantry', 350), front = enemy(g, 'infantry', 420), air = enemy(g, 'helicopter', 440);
-  rifle.cooldown = aa.cooldown = 0;
+test('closest targeting prefers the road lane nearest each defender before physical distance', () => {
+  const g = game();
+  const towerPoint = sampleRoad(500, -100), nearLanePoint = sampleRoad(670, -45), farLanePoint = sampleRoad(500, 45);
+  const rifle = unit(g, 'rifleman', towerPoint.x, towerPoint.y);
+  const nearLane = enemy(g, 'infantry', nearLanePoint.x, nearLanePoint.y);
+  const farLane = enemy(g, 'infantry', farLanePoint.x, farLanePoint.y);
+  Object.assign(nearLane, { roadDistance: 670, subLane: 0, lateralOffset: -45, targetOffset: -45, speed: 0, preferredSpeed: 0, currentSpeed: 0 });
+  Object.assign(farLane, { roadDistance: 500, subLane: 4, lateralOffset: 45, targetOffset: 45, speed: 0, preferredSpeed: 0, currentSpeed: 0 });
+  assert.ok(Math.hypot(farLane.x - rifle.x, farLane.y - rifle.y) < Math.hypot(nearLane.x - rifle.x, nearLane.y - rifle.y));
+  assert.equal(rifle.targetPriority, 'closest'); rifle.cooldown = 0;
   g.update(0, 16);
-  assert.equal(g.projectiles.find(p => p.source === rifle).target, front);
-  assert.equal(g.projectiles.find(p => p.source === aa).target, air);
-  assert.notEqual(g.projectiles.find(p => p.source === rifle).target, back);
+  assert.equal(g.projectiles.find(p => p.source === rifle).target, nearLane);
+});
+
+test('AA targets aircraft exclusively and uses physical distance for its closest priority', () => {
+  const g = game(); const aa = unit(g, 'aa', 550, 350);
+  enemy(g, 'infantry', 540); const nearAir = enemy(g, 'helicopter', 500), farAir = enemy(g, 'helicopter', 350);
+  aa.cooldown = 0; g.update(0, 16);
+  assert.equal(g.projectiles.find(p => p.source === aa).target, nearAir);
+  assert.notEqual(g.projectiles.find(p => p.source === aa).target, farAir);
+});
+
+test('snipers cover almost the entire playable battlefield', () => {
+  assert.equal(SOLDIER_TYPES.sniper.range, 900);
+  const g = game(), sniper = unit(g, 'sniper', 950, 350), target = enemy(g, 'infantry', 75, 350);
+  sniper.cooldown = 0; g.update(0, 16);
+  assert.equal(g.projectiles.find(projectile => projectile.source === sniper)?.target, target);
+});
+
+test('.50 Cal sniper rounds travel faster than standard bullets', () => {
+  const g = game(), sniper = unit(g, 'sniper'), target = enemy(g, 'infantry', 300, 350);
+  g.fire(sniper, target); assert.equal(g.projectiles[0].speed, 680); assert.equal(Math.hypot(g.projectiles[0].x - sniper.x, g.projectiles[0].y - sniper.y), 25);
+  sniper.specialUpgrades.fiftycal = true;
+  g.fire(sniper, target); assert.equal(g.projectiles[1].speed, 1100); assert.equal(Math.hypot(g.projectiles[1].x - sniper.x, g.projectiles[1].y - sniper.y), 34);
+});
+
+test('.50 Cal upgrade switches the sniper to its dedicated heavy-rifle artwork', () => {
+  const g = game(), sniper = unit(g, 'sniper'); g.selectedUnit = sniper; g.money = 500;
+  g.upgradeSelected();
+  assert.equal(sniper.sprite.texture, 'sniper-fiftycal');
+});
+
+test('defender targeting priorities choose strongest and weakest contacts', () => {
+  for (const [priority, expected] of [['strongest', 'strong'], ['weakest', 'weak']]) {
+    const g = game(), defender = unit(g, 'rifleman', 500, 350);
+    const contacts = { near: enemy(g, 'infantry', 450, 350), strong: enemy(g, 'heavy', 350, 350), weak: enemy(g, 'infantry', 400, 350) };
+    contacts.strong.health = contacts.strong.maxHealth = 300; contacts.weak.health = 5;
+    defender.targetPriority = priority; defender.cooldown = 0; g.update(0, 16);
+    assert.equal(g.projectiles.find(projectile => projectile.source === defender)?.target, contacts[expected]);
+  }
+});
+
+test('medics heal every injured nearby ally and never fire at enemies', () => {
+  const g = game(), medic = unit(g, 'medic', 500, 350);
+  const critical = unit(g, 'rifleman', 540, 350), wounded = unit(g, 'rifleman', 570, 350);
+  critical.health = 20; wounded.health = 80; medic.cooldown = 0;
+  enemy(g, 'infantry', 450, 350);
+  g.update(0, 16);
+  assert.equal(critical.health, 30); assert.equal(wounded.health, 90);
+  assert.equal(g.projectiles.some(projectile => projectile.source === medic), false);
+  assert.equal(g.effects.items.length, 3);
+  assert.equal(g.effects.items[0].sprite.x, medic.x); assert.equal(g.effects.items[0].sprite.y, medic.y);
+  assert.ok(medic.cooldown > 2);
+  for (let i = 0; i < 30; i++) g.update(0, 16);
+  const focusAngle = Math.atan2(critical.y - medic.y, critical.x - medic.x);
+  const aimError = Math.abs(Math.atan2(Math.sin(medic.sprite.rotation - focusAngle), Math.cos(medic.sprite.rotation - focusAngle)));
+  assert.ok(aimError < .03);
+});
+
+test('medic upgrades improve healing output, range, rate, and survivability', () => {
+  const g = game(), medic = unit(g, 'medic'); g.selectedUnit = medic; g.money = 300;
+  g.upgradeSelected();
+  assert.equal(medic.name, 'Field Surgeon'); assert.equal(g.money, 150);
+  assert.equal(medic.healing, 15); assert.ok(medic.range > 200);
+  assert.equal(medic.maxHealth, 120);
+});
+
+test('hidden debug controls set the next wave only between assaults', () => {
+  const g = game();
+  assert.equal(g.setDebugWave(12), true); assert.equal(g.waveManager.wave, 11);
+  assert.equal(g.setDebugWave(99), true); assert.equal(g.waveManager.wave, 24);
+  g.waveManager.active = true;
+  assert.equal(g.setDebugWave(4), false); assert.equal(g.waveManager.wave, 24);
+});
+
+test('hidden debug controls set and validate available funds', () => {
+  const g = game();
+  assert.equal(g.setDebugFunds(1234), true); assert.equal(g.money, 1234);
+  assert.equal(g.setDebugFunds(-50), true); assert.equal(g.money, 0);
+  assert.equal(g.setDebugFunds('invalid'), false); assert.equal(g.money, 0);
 });
 
 test('friendly ground units acquire ground enemies created from real wave plans', () => {
@@ -156,12 +249,51 @@ test('friendly ground units acquire ground enemies created from real wave plans'
   assert.equal(g.projectiles.find(projectile => projectile.source === rifle)?.target, planned);
 });
 
+test('defenders ignore the hidden road entrance and engage once enemies enter the field', () => {
+  const g = game(), rifle = unit(g, 'rifleman', 80, 350);
+  const planned = createEnemy(g, getWavePlan(1).enemies[0], 0);
+  const hidden = sampleRoad(0, planned.lateralOffset);
+  Object.assign(planned, { pending: false, roadDistance: 0, x: hidden.x, y: hidden.y });
+  g.enemies.push(planned); rifle.cooldown = 0;
+  g.update(0, 16);
+  assert.equal(g.projectiles.some(projectile => projectile.source === rifle), false);
+  assert.equal(planned.sprite.visible, false);
+
+  const entrance = sampleRoad(85, planned.lateralOffset);
+  Object.assign(planned, { roadDistance: 85, x: entrance.x, y: entrance.y }); rifle.cooldown = 0;
+  g.update(0, 16);
+  assert.equal(g.projectiles.find(projectile => projectile.source === rifle)?.target, planned);
+  assert.equal(planned.sprite.visible, true);
+});
+
+test('wave spawning applies backpressure to hidden ground reinforcements', () => {
+  const g = game(); g.waveManager.startWave();
+  g.enemies = Array.from({ length: 3 }, () => ({ airborne: false, pending: true, x: -70 }));
+  const queued = g.waveManager.queue.length; g.waveManager.update(2);
+  assert.equal(g.waveManager.queue.length, queued);
+  g.enemies[0].pending = false; g.enemies[0].x = 1; g.spawnEnemy = stats => g.enemies.push(stats);
+  g.waveManager.update(0);
+  assert.equal(g.waveManager.queue.length, queued - 1);
+});
+
 test('projectiles kill once, award funds, and dispose the sprite and shadow', () => {
   const g = game(); const u = unit(g), e = enemy(g, 'infantry', 450); e.health = 1;
   g.fire(u, e); g.updateProjectiles(.2);
   assert.equal(e.alive, false); assert.equal(e.sprite.destroyed, true); assert.equal(e.shadow.destroyed, true);
   assert.equal(g.money, 360); assert.equal(g.kills, 1); assert.equal(u.kills, 1);
   g.damageEnemy(e, 100, u); assert.equal(g.money, 360); assert.equal(g.projectiles.length, 0);
+});
+
+test('friendly rounds continue to a defeated target position and impact there', () => {
+  const g = game(), shooter = unit(g, 'sniper', 700, 350), target = enemy(g, 'infantry', 150, 350);
+  g.fire(shooter, target); const round = g.projectiles[0];
+  g.damageEnemy(target, 1000, shooter); const effectsBeforeImpact = g.effects.items.length;
+  g.updateProjectiles(.1);
+  assert.equal(g.projectiles[0], round); assert.deepEqual(round.impactPoint, { x: 150, y: 350 });
+  for (let i = 0; i < 12 && g.projectiles.length; i++) g.updateProjectiles(.1);
+  assert.equal(g.projectiles.length, 0);
+  assert.equal(g.effects.items.length, effectsBeforeImpact + 4);
+  assert.ok(g.effects.items.slice(-4).every(effect => effect.sprite.x === 150 && effect.sprite.y === 350));
 });
 
 test('enemy fire damages and destroys defenders without granting enemy rewards', () => {
@@ -203,6 +335,13 @@ test('mines trigger on ground contact and spare nearby aircraft', () => {
   assert.equal(g.mines.length, 0); assert.equal(ground.alive, false); assert.equal(air.health, 100);
 });
 
+test('landmines detect ground enemies within the expanded trigger radius', () => {
+  const g = game(), ground = enemy(g, 'infantry', 434, 350);
+  g.mines.push({ x: 400, y: 350, sprite: display(400, 350) });
+  g.updateSupport(.01);
+  assert.equal(g.mines.length, 0); assert.equal(ground.alive, false);
+});
+
 test('air strikes have a one-second delay, pause correctly and hit ground and air', () => {
   const g = game(); const ground = enemy(g), air = enemy(g, 'helicopter', 430);
   g.selectedType = 'airstrike'; g.handleFieldClick(420, 350); assert.equal(g.money, 210);
@@ -235,16 +374,23 @@ test('cleared waves repair surviving units without exceeding maximum health', ()
   u.health = 30; g.onWaveComplete(getWavePlan(2)); assert.equal(u.health, 42);
 });
 
-test('tank small-arms resistance and juggernaut frontal armor reward weapon mix and crossfire', () => {
+test('tank resists small arms and juggernaut armor depletes before health', () => {
   const g = game(), rifle = unit(g, 'rifleman', 550, 350), sniper = unit(g, 'sniper', 550, 350);
   const tank = enemy(g, 'tank', 450, 350); tank.health = tank.maxHealth = 100;
   g.damageEnemy(tank, 10, rifle); assert.equal(tank.health, 96);
   g.damageEnemy(tank, 10, sniper); assert.equal(tank.health, 89.5);
   sniper.specialUpgrades.fiftycal = true;
   g.damageEnemy(tank, 10, sniper); assert.equal(tank.health, 79.5);
-  const juggernaut = enemy(g, 'juggernaut', 450, 350); juggernaut.health = juggernaut.maxHealth = 100; juggernaut.heading = 0;
-  g.damageEnemy(juggernaut, 10, rifle); assert.equal(juggernaut.health, 95);
-  rifle.x = 350; g.damageEnemy(juggernaut, 10, rifle); assert.equal(juggernaut.health, 85);
+  const juggernaut = enemy(g, 'juggernaut', 450, 350);
+  assert.equal(juggernaut.maxArmor, 50);
+  g.damageEnemy(juggernaut, 40, rifle);
+  assert.equal(juggernaut.armor, 10); assert.equal(juggernaut.health, 100);
+  g.damageEnemy(juggernaut, 15, rifle);
+  assert.equal(juggernaut.armor, 0); assert.equal(juggernaut.health, 95);
+  const armorEffects = g.effects.items.length;
+  g.damageEnemy(juggernaut, 10, rifle);
+  assert.equal(juggernaut.health, 85);
+  assert.equal(g.effects.items.length, armorEffects + 4);
 });
 
 test('heavy troops hunt wounded defenders, suppress their fire, and helicopters prioritize AA', () => {
@@ -262,6 +408,15 @@ test('heavy troops hunt wounded defenders, suppress their fire, and helicopters 
   airGame.update(0, 16);
   assert.equal(airGame.projectiles.find(projectile => projectile.source === helicopter).target, aa);
   assert.notEqual(rifle, aa);
+});
+
+test('sentry and AA emplacements take damage but are immune to suppression', () => {
+  const g = game(), heavy = enemy(g, 'heavy'); heavy.suppression = 2;
+  const sentry = unit(g, 'machinegun'), aa = unit(g, 'aa');
+  const sentryHealth = sentry.health, aaHealth = aa.health;
+  g.damageUnit(sentry, 5, heavy); g.damageUnit(aa, 5, heavy);
+  assert.equal(sentry.health, sentryHealth - 5); assert.equal(aa.health, aaHealth - 5);
+  assert.equal(sentry.suppression, 0); assert.equal(aa.suppression, 0);
 });
 
 test('sentry heat forces a cooling cycle after sustained fire', () => {

@@ -50,6 +50,7 @@ test('manifest covers every friendly upgrade, enemy weapon and impact surface', 
   for (const type of ['infantry', 'heavy', 'juggernaut', 'tank', 'helicopter']) expected.add(weaponCue({ type }, true));
   for (const id of expected) assert.ok(AUDIO_MANIFEST.cues[id], id);
   assert.equal(weaponCue({ type: 'machinegun', specialUpgrades: { laser: true, minigun: true } }), 'weapon.friendly.laser');
+  assert.ok(AUDIO_MANIFEST.cues['weapon.friendly.fiftycal'].gain > AUDIO_MANIFEST.cues['weapon.friendly.sniper'].gain);
   assert.equal(impactCue({ type: 'tank' }), 'impact.armor');
   assert.equal(impactCue({ type: 'rifleman' }), 'impact.flesh');
   const files = Object.values(AUDIO_MANIFEST.cues).flatMap(def => def.files);
